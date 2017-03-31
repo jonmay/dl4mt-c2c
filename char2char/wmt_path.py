@@ -43,6 +43,36 @@ deen={
             ],
 }
 
+amheng={
+    "dic": [
+                ["amheng/train/train.src.304.pkl",
+                 "amheng/train/train.trg.302.pkl",],
+
+            ],
+
+    "train": [
+                ["amheng/train/train.src.shuf",
+                 "amheng/train/train.trg.shuf",],
+            ],
+
+    "dev": [
+                ["amheng/dev/dev.src",
+                 "amheng/dev/dev.trg",],
+
+            ],
+
+    "test1" :[
+                ["amheng/test/test.src",
+                 "amheng/test/test.trg",],
+
+            ],
+
+    "test2":[
+                ["amheng/test/test.src",
+                 "amheng/test/test.trg",],
+            ],
+}
+
 csen={
 
     "dic":[
@@ -170,6 +200,7 @@ manyen = {
 }
 
 wmts = dict()
+wmts["amh_eng"] = amheng
 wmts["de_en"] = deen
 wmts["cs_en"] = csen
 wmts["fi_en"] = fien

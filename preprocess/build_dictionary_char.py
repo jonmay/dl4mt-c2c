@@ -3,10 +3,24 @@ import fileinput
 import numpy
 import sys
 import codecs
+import argparse
 
 from collections import OrderedDict
 
-def main(filename, short_list, src):
+def main():
+    parser = argparse.ArgumentParser(description="hack nonworking cho code")
+    parser.add_argument("--filename", "-f", help="input file")
+    parser.add_argument("--shortlist", "-s", default=None, type=int, help="no idea")
+    parser.add_argument("--src", default=False, action='store_true', help="src side")
+
+    try:
+        args = parser.parse_args()
+    except IOError, msg:
+        parser.error(str(msg))
+
+    filename = args.filename
+    short_list = args.shortlist
+    src = args.src
     # Build character dictionaries
     print 'Processing', filename
     word_freqs = OrderedDict()
@@ -66,3 +80,6 @@ def main(filename, short_list, src):
     f.close()
     print 'Done'
     print len(worddict)
+
+if __name__ == '__main__':
+    main()

@@ -158,7 +158,7 @@ if __name__ == "__main__":
     parser.add_argument('-utf8', action="store_true", default=True)
     parser.add_argument('-many', action="store_true", default=False) # multilingual model?
     parser.add_argument('-model', type=str) # absolute path to a model (.npz file)
-    parser.add_argument('-translate', type=str, help="de_en / cs_en / fi_en / ru_en") # which language? 
+    parser.add_argument('-translate', type=str, help="de_en / cs_en / fi_en / ru_en / amh_eng") # which language? 
     parser.add_argument('-saveto', type=str) # absolute path where the translation should be saved
     parser.add_argument('-which', type=str, help="dev / test1 / test2", default="dev") # if you wish to translate any of development / test1 / test2 file from WMT15, simply specify which one here
     parser.add_argument('-source', type=str, default="") # if you wish to provide your own file to be translated, provide an absolute path to the file to be translated
@@ -176,7 +176,7 @@ if __name__ == "__main__":
     if args.which not in "dev test1 test2".split():
         raise Exception('1')
 
-    if args.translate not in ["de_en", "cs_en", "fi_en", "ru_en"]:
+    if args.translate not in ["de_en", "cs_en", "fi_en", "ru_en", "amh_eng"]:
         raise Exception('1')
 
     if args.translate == "fi_en" and args.which == "test2":

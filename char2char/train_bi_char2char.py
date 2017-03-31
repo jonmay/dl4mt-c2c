@@ -146,7 +146,7 @@ if __name__ == '__main__':
         args.n_words_src = 304
         args.n_words = 302
 
-    if args.translate not in "de_en cs_en fi_en ru_en".split():
+    if args.translate not in "de_en cs_en fi_en ru_en amh_eng".split():
         raise Exception('1')
 
     args.model_name = "bi-char2char"
@@ -154,8 +154,8 @@ if __name__ == '__main__':
     args.conv_width = [ int(x) for x in args.conv_width.split("-") ]
     args.conv_nkernels = [ int(x) for x in args.conv_nkernels.split("-") ]
 
-    args.model_path = "/misc/kcgscratch1/ChoGroup/jasonlee/dl4mt-c2c/models/" # change accordingly
-    args.data_path = "/misc/kcgscratch1/ChoGroup/jasonlee/temp_data/wmt15/" # change accordingly
+    args.model_path = "/nfs/isd/jonmay/projects/dl4mt-c2c/models/" # change accordingly
+    args.data_path = "/nfs/isd/jonmay/projects/dl4mt-c2c/wmt15/" # change accordingly
     args.model_path = args.model_path + args.translate + "/"
 
     print "Model path:", args.model_path
