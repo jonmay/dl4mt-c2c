@@ -8,15 +8,17 @@ from char_base import *
 from nmt import train
 from conv_tools import *
 from prepare_data import *
+import os.path
+scriptdir = os.path.dirname(os.path.abspath(__file__))
 
 def main(job_id, args):
     save_file_name = args.model_name
-    source_dataset = args.data_path + wmts[args.translate]['train'][0][0]
-    target_dataset = args.data_path + wmts[args.translate]['train'][0][1]
-    valid_source_dataset = args.data_path + wmts[args.translate]['dev'][0][0]
-    valid_target_dataset = args.data_path + wmts[args.translate]['dev'][0][1]
-    source_dictionary = args.data_path + wmts[args.translate]['dic'][0][0]
-    target_dictionary = args.data_path + wmts[args.translate]['dic'][0][1]
+    source_dataset =       os.path.join(args.data_path, wmts[args.translate]['train'][0][0])
+    target_dataset =       os.path.join(args.data_path, wmts[args.translate]['train'][0][1])
+    valid_source_dataset = os.path.join(args.data_path, wmts[args.translate]['dev'][0][0]  )
+    valid_target_dataset = os.path.join(args.data_path, wmts[args.translate]['dev'][0][1]  )
+    source_dictionary =    os.path.join(args.data_path, wmts[args.translate]['dic'][0][0]  )
+    target_dictionary =    os.path.join(args.data_path, wmts[args.translate]['dic'][0][1]  )
 
     print args.model_path, save_file_name
     print source_dataset
@@ -154,9 +156,9 @@ if __name__ == '__main__':
     args.conv_width = [ int(x) for x in args.conv_width.split("-") ]
     args.conv_nkernels = [ int(x) for x in args.conv_nkernels.split("-") ]
 
-    args.model_path = "/nfs/isd/jonmay/projects/dl4mt-c2c/models/" # change accordingly
-    args.data_path = "/nfs/isd/jonmay/projects/dl4mt-c2c/wmt15/" # change accordingly
-    args.model_path = args.model_path + args.translate + "/"
+    args.model_path = os.path.normpath(os.path.join(scriptdir, "..", "models"))
+    args.data_path = os.path.normpath(os.path.join(scriptdir, "..", "wmt15"))
+    args.model_path = os.path.join(args.model_path, args.translate)
 
     print "Model path:", args.model_path
 
