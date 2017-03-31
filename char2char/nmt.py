@@ -16,6 +16,7 @@ import copy
 from print_batch import pbatch
 
 import os
+import os.path
 import warnings
 import sys
 import time
@@ -141,11 +142,11 @@ def train(
     if not os.path.exists(model_path):
         os.makedirs(model_path)
 
-    file_name = '%s%s.npz' % (model_path, save_file_name)
-    best_file_name = '%s%s.best.npz' % (model_path, save_file_name)
-    opt_file_name = '%s%s%s.npz' % (model_path, save_file_name, '.grads')
-    best_opt_file_name = '%s%s%s.best.npz' % (model_path, save_file_name, '.grads')
-    model_name = '%s%s.pkl' % (model_path, save_file_name)
+    file_name = os.path.join(model_path, '%s.npz' % save_file_name)
+    best_file_name = os.path.join(model_path, '%s.best.npz' % save_file_name)
+    opt_file_name = os.path.join(model_path, '%s%s.npz' % (save_file_name, '.grads'))
+    best_opt_file_name = os.path.join(model_path, '%s%s.best.npz' % (save_file_name, '.grads'))
+    model_name = os.path.join(model_path, '%s.pkl' % save_file_name)
     params = init_params(model_options)
 
     cnt = 0
@@ -569,14 +570,14 @@ def train(
                 numpy.savez(opt_file_name, **optparams)
 
                 if save_every_saveFreq and (uidx >= save_burn_in):
-                    this_file_name = '%s%s.%d.npz' % (model_path, save_file_name, uidx)
-                    this_opt_file_name = '%s%s%s.%d.npz' % (model_path, save_file_name, '.grads', uidx)
+                    this_file_name = os.path.join(model_path, '%s.%d.npz' % (save_file_name, uidx))
+                    this_opt_file_name = os.path.join(model_path, '%s%s.%d.npz' % (save_file_name, '.grads', uidx))
                     numpy.savez(this_file_name, history_errs=history_errs, uidx=uidx, eidx=eidx,
                                 cidx=cidx, **params)
                     numpy.savez(this_opt_file_name, history_errs=history_errs, uidx=uidx, eidx=eidx,
                                 cidx=cidx, **params)
                     if best_p is not None and saveFreq != validFreq:
-                        this_best_file_name = '%s%s.%d.best.npz' % (model_path, save_file_name, uidx)
+                        this_best_file_name = os.path.join(model_path, '%s.%d.best.npz' % (save_file_name, uidx))
                         numpy.savez(this_best_file_name, history_errs=history_errs, uidx=uidx, eidx=eidx,
                                     cidx=cidx, **best_p)
                 print 'Done...',
@@ -606,13 +607,13 @@ def train(
 
     params = unzip(tparams)
     optparams = unzip(toptparams)
-    file_name = '%s%s.%d.npz' % (model_path, save_file_name, uidx)
-    opt_file_name = '%s%s%s.%d.npz' % (model_path, save_file_name, '.grads', uidx)
+    file_name = os.path.join(model_path, '%s.%d.npz' % (save_file_name, uidx))
+    opt_file_name = os.path.join(model_path, '%s%s.%d.npz' % (save_file_name, '.grads', uidx))
     numpy.savez(file_name, history_errs=history_errs, uidx=uidx, eidx=eidx, cidx=cidx, **params)
     numpy.savez(opt_file_name, **optparams)
     if best_p is not None and saveFreq != validFreq:
-        best_file_name = '%s%s.%d.best.npz' % (model_path, save_file_name, uidx)
-        best_opt_file_name = '%s%s%s.%d.best.npz' % (model_path, save_file_name, '.grads',uidx)
+        best_file_name = os.path.join(model_path, '%s.%d.best.npz' % (save_file_name, uidx))
+        best_opt_file_name = os.path.join(model_path, '%s%s.%d.best.npz' % (save_file_name, '.grads',uidx))
         numpy.savez(best_file_name, history_errs=history_errs, uidx=uidx, eidx=eidx, cidx=cidx, **best_p)
         numpy.savez(best_opt_file_name, **best_optp)
 
