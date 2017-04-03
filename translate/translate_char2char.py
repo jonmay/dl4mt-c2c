@@ -2,11 +2,11 @@ import argparse
 import sys
 import os
 import time
+import os.path
+scriptdir = os.path.dirname(os.path.abspath(__file__))
 
 reload(sys)
 sys.setdefaultencoding('utf-8')
-
-sys.path.insert(0, "/misc/kcgscratch1/ChoGroup/jasonlee/dl4mt-c2c/char2char") # change appropriately
 
 import numpy
 import cPickle as pkl
@@ -164,8 +164,8 @@ def main(model, dictionary, dictionary_target, source_file, saveto, k=5,
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('-k', type=int, default=20) # beam width
-    parser.add_argument('-n', action="store_true", default=True) # normalize scores for different hypothesis based on their length (to penalize shorter hypotheses, longer hypotheses are already penalized by the BLEU measure, which is precision of sorts).
+    parser.add_argument('-k', type=int, default=20, help="beam width") # beam width
+    parser.add_argument('-n', action="store_true", default=True, help="normalize") # normalize scores for different hypothesis based on their length (to penalize shorter hypotheses, longer hypotheses are already penalized by the BLEU measure, which is precision of sorts).
     parser.add_argument('-enc_c', action="store_true", default=True) # is encoder character-level?
     parser.add_argument('-dec_c', action="store_true", default=True) # is decoder character-level?
     parser.add_argument('-utf8', action="store_true", default=True)
@@ -185,7 +185,7 @@ if __name__ == "__main__":
     else:
         which_wmt = "wmt15"
 
-    data_path = "/misc/kcgscratch1/ChoGroup/jasonlee/temp_data/%s/" % which_wmt # change appropriately
+    data_path = os.path.normpath(os.path.join(scriptdir, "..", which_wmt))
 
     if args.which not in "dev test1 test2".split():
         raise Exception('1')

@@ -23,11 +23,15 @@ def init_params(options):
     params['Wemb'] = norm_weight(options['n_words_src'], options['dim_word_src'])
     params['Wemb_dec'] = norm_weight(options['n_words'], options['dim_word'])
 
+    print("getting layers")
     params = get_layer('multi_scale_conv_encoder')[0](options, params, prefix='multi_scale_conv_enc1', dim=options['dim_word_src'], width=options['conv_width'], nkernels=options['conv_nkernels'])
 
+    print("getting %d highway" % options['highway'])
     for ii in xrange(options['highway']):
+        print("highway %d" % ii)
         params = get_layer('hw')[0](options, params, prefix="hw_network{}".format(ii+1), dim=numpy.sum(options['conv_nkernels']))
 
+    print("Getting encoders")
     params = get_layer('gru')[0](options, params,
                                  prefix='encoder',
                                  nin=numpy.sum(options['conv_nkernels']),
@@ -38,6 +42,7 @@ def init_params(options):
                                  dim=options['enc_dim'])
     ctxdim = 2 * options['enc_dim']
 
+    print("getting decoders")
     params = get_layer('ff')[0](options, params,
                                 prefix='ff_init_state_char',
                                 nin=ctxdim,

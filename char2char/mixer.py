@@ -10,6 +10,7 @@ from theano.tensor.nnet import conv2d
 from theano.tensor.signal.pool import pool_2d
 
 import numpy
+import scipy
 import copy
 
 import os
@@ -128,13 +129,19 @@ def load_params(path, params):
 
 
 def get_layer(name):
+    print("in get_layer")
     fns = layers[name]
+    print(fns[0], fns[1])
     return (eval(fns[0]), eval(fns[1]))
 
 # some utilities
 def ortho_weight(ndim, scale=0.01):
+    print("in ortho weight; getting random matrix of scale %d" % ndim)
     W = scale * numpy.random.randn(ndim, ndim)
+    print("running svd")
+    start = time.time()
     u, s, v = numpy.linalg.svd(W)
+    print("returning: %f secs" % (time.time()-start))
     return u.astype('float32')
 
 
@@ -144,11 +151,14 @@ def norm_vector(nin, scale=0.01):
 
 
 def norm_weight(nin, nout=None, scale=0.01, ortho=True):
+    print("in norm weight")
     if nout is None:
         nout = nin
     if nout == nin and ortho:
+        print("getting ortho weight")
         W = ortho_weight(nin)
     else:
+        print("getting random weight")
         W = scale * numpy.random.randn(nin, nout)
     return W.astype('float32')
 
@@ -210,9 +220,11 @@ def param_init_fflayer(options, params, prefix='ff', nin=None, nout=None,
         nin = options['dim_proj']
     if nout is None:
         nout = options['dim_proj']
+    print("in param_init_fflayer; getting norm weight")
     params[_p(prefix, 'W')] = norm_weight(nin, nout, scale=scale, ortho=ortho)
+    print("getting a zeros")
     params[_p(prefix, 'b')] = numpy.zeros((nout,)).astype('float32')
-
+    print("returning")
     return params
 
 
@@ -223,10 +235,11 @@ def fflayer(tparams, state_below, options, prefix='rconv',
         tparams[_p(prefix, 'b')])
 
 def param_init_hwlayer(options, params, prefix='hw', dim=None):
+    print("in param_init_hwlayer")
     param_init_fflayer(options, params, prefix, dim, dim)
     params[_p(prefix, 'W_t')] = ortho_weight(dim)
     params[_p(prefix, 'b_t')] = numpy.zeros((dim,)).astype('float32')
-
+    print("done with param_init_hwlayer")
     return params
 
 # highway network
@@ -251,6 +264,7 @@ def small_hwlayer(tparams, state_below, options, prefix='small_hw', **kwargs):
     return state_below*(1.0 - transform)
 
 def hwlayer(tparams, state_below, options, prefix='hw', **kwargs):
+    print("in hwlayer")
     W = tparams[_p(prefix, 'W')]
     b = tparams[_p(prefix, 'b')]
     W_t = tparams[_p(prefix, 'W_t')]
@@ -259,7 +273,7 @@ def hwlayer(tparams, state_below, options, prefix='hw', **kwargs):
     output = tensor.nnet.relu( tensor.dot(state_below, W) + b )
     transform = tensor.nnet.sigmoid( bias + tensor.dot(state_below, W_t) + b_t )
     # state_below : maxlen/width X n_samples X dim_word_src
-
+    print("about to return from hwlayer")
     return output*transform + state_below*(1.0 - transform)
 
 # feedforward layer short-cut: affine transformation + point-wise nonlinearity
