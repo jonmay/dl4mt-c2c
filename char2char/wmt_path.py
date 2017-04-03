@@ -45,8 +45,8 @@ deen={
 
 amheng={
     "dic": [
-                ["amheng/train/train.src.304.pkl",
-                 "amheng/train/train.trg.302.pkl",],
+                ["amheng/train/train.src.shuf.304.pkl",
+                 "amheng/train/train.trg.shuf.302.pkl",],
 
             ],
 
