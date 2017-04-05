@@ -12,6 +12,7 @@ def main():
     parser.add_argument("--filename", "-f", help="input file")
     parser.add_argument("--shortlist", "-s", default=None, type=int, help="no idea")
     parser.add_argument("--src", default=False, action='store_true', help="src side")
+    parser.add_argument("--words", default=False, action='store_true', help="words, not chars")
 
     try:
         args = parser.parse_args()
@@ -33,7 +34,10 @@ def main():
                 print 'line', number
 
             words_in = line.strip()
-            words_in = list(words_in.decode('utf8'))
+            if args.words:
+                words_in = words_in.split(' ')
+            else:
+                words_in = list(words_in.decode('utf8'))
 
             for w in words_in:
                 if w not in word_freqs:

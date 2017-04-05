@@ -1,5 +1,6 @@
 '''
 Build a simple neural machine translation model using GRU units
+Mods to be compatible with c2c.jm.py
 '''
 import theano
 import datetime
@@ -72,8 +73,6 @@ def train(
       alpha_c=0.,  # alignment regularization
       clip_c=-1.,  # gradient clipping threshold
       lrate=0.01,  # learning rate
-      n_words_src=100000,  # source vocabulary size
-      n_words=100000,  # target vocabulary size
       maxlen=1000,  # maximum length of the description
       maxlen_trg=1000,  # maximum length of the description
       maxlen_sample=1000,
@@ -139,10 +138,11 @@ def train(
         for kk, vv in worddicts[ii].iteritems():
             worddicts_r[ii][vv] = kk
 
-    print 'Building model'
     if not os.path.exists(model_path):
         os.makedirs(model_path)
 
+    model_options['n_words_src'] = len(worddicts[0])
+    model_options['n_words'] = len(worddicts[1])
     file_name = os.path.join(model_path, '%s.npz' % save_file_name)
     best_file_name = os.path.join(model_path, '%s.best.npz' % save_file_name)
     opt_file_name = os.path.join(model_path, '%s%s.npz' % (save_file_name, '.grads'))
@@ -155,21 +155,21 @@ def train(
     conv_params, hw_params = 0, 0
     for kk, vv in params.iteritems():
         if (kk == "Wemb"):
-            print kk, vv.size
+            print >>logfile, kk, vv.size
             cnt_emb += vv.size
         if "conv" in kk:
-            print kk, vv.size
+            print >>logfile, kk, vv.size
             conv_params += vv.size
         if "hw" in kk:
-            print kk, vv.size
+            print >>logfile, kk, vv.size
             hw_params += vv.size
         cnt += vv.size
-    print "# Total params:", cnt
-    print "# Emb params:", cnt_emb
-    print "# Conv params:", conv_params
-    print "# HW params:", hw_params
-    print "# Input params:", cnt_emb + conv_params + hw_params
-
+    logfile.write("# Total params: {}\n".format(cnt))
+    logfile.write("# Emb params: {}\n".format( cnt_emb                             ))
+    logfile.write("# Conv params: {}\n".format( conv_params                        ))
+    logfile.write("# HW params: {}\n".format( hw_params                            ))
+    logfile.write("# Input params: {}\n".format( cnt_emb + conv_params + hw_params ))
+    logfile.flush()
     if quit_immediately:
         sys.exit(1)
 
@@ -182,7 +182,7 @@ def train(
     # reload options
     # reload : False
     if re_load and os.path.exists(file_name):
-        print 'You are reloading your experiment.. do not panic dude..'
+        logfile.write('You are reloading your experiment.. do not panic dude..\n')
         if re_load_old_setting:
             with open(model_name, 'rb') as f:
                 models_options = cPickle.load(f)
@@ -206,14 +206,13 @@ def train(
             eidx = 0
         if cidx is None:
             cidx = 0
-
-    print 'Loading data'
+    print >>logfile, 'Loading data'
     train = TextIterator(source=datasets[0],
                          target=datasets[1],
                          source_dict=dictionaries[0],
                          target_dict=dictionaries[1],
-                         n_words_source=n_words_src,
-                         n_words_target=n_words,
+                         n_words_source=len(worddicts[0]),
+                         n_words_target=len(worddicts[1]),
                          source_word_level=source_word_level,
                          target_word_level=target_word_level,
                          batch_size=batch_size,
@@ -223,8 +222,8 @@ def train(
                          target=valid_datasets[1],
                          source_dict=dictionaries[0],
                          target_dict=dictionaries[1],
-                         n_words_source=n_words_src,
-                         n_words_target=n_words,
+                         n_words_source=len(dictionaries[0]),
+                         n_words_target=len(dictionaries[1]),
                          source_word_level=source_word_level,
                          target_word_level=target_word_level,
                          batch_size=valid_batch_size,
@@ -238,18 +237,19 @@ def train(
         opt_ret, \
         cost = \
         build_model(tparams, model_options)
+    logfile.flush()
     # NOTE : this is where we build the model
     inps = [x, x_mask, y, y_mask]
 
-    print 'Building sampler...\n',
+    print >>logfile,'Building sampler...\n',
     f_init, f_next = build_sampler(tparams, model_options, trng, use_noise)
-    #print 'Done'
+    #print >>logfile,'Done'
 
     # before any regularizer
-    print 'Building f_log_probs...',
+    print >>logfile,'Building f_log_probs...',
     f_log_probs = theano.function(inps, cost, profile=profile)
     # NOTE : f_log_probs : [x, x_mask, y, y_mask], cost
-    print 'Done'
+    print >>logfile,'Done'
 
     if re_load: 
         use_noise.set_value(0.)
@@ -266,7 +266,7 @@ def train(
             import ipdb
             ipdb.set_trace()
 
-        print 'Reload sanity check: Valid ', valid_err
+        print >>logfile,'Reload sanity check: Valid ', valid_err
 
     cost = cost.mean()
 
@@ -290,14 +290,14 @@ def train(
         cost += alpha_reg
 
     # after all regularizers - compile the computational graph for cost
-    print 'Building f_cost...',
+    print >>logfile,'Building f_cost...',
     f_cost = theano.function(inps, cost, profile=profile)
     # NOTE : why is this not referenced somewhere later?
-    print 'Done'
+    print >>logfile,'Done'
 
-    print 'Computing gradient...',
+    print >>logfile,'Computing gradient...',
     grads = tensor.grad(cost, wrt=itemlist(tparams))
-    print 'Done'
+    print >>logfile,'Done'
 
     if clip_c > 0:
         grads, not_finite, clipped = gradient_clipping(grads, tparams, clip_c)
@@ -307,7 +307,7 @@ def train(
 
     # compile the optimizer, the actual computational graph is compiled here
     lr = tensor.scalar(name='lr')
-    print 'Building optimizers...',
+    print >>logfile,'Building optimizers...',
     if re_load and os.path.exists(file_name):
         if clip_c > 0:
             f_grad_shared, f_update, toptparams = eval(optimizer)(lr, tparams, grads, inps, cost=cost,
@@ -330,9 +330,10 @@ def train(
             #                   on_unused_input='ignore', profile=profile)
             # toptparams
 
-    print 'Done'
+    print >>logfile,'Done'
 
-    print 'Optimization'
+    print >>logfile,'Optimization'
+    logfile.flush()
     best_p = None
     bad_counter = 0
 
@@ -346,13 +347,14 @@ def train(
     estop = False
 
     if re_load:
-        print "Checkpointed minibatch number: %d" % cidx
+        print >>logfile,"Checkpointed minibatch number: %d" % cidx
         for cc in xrange(cidx):
             if numpy.mod(cc, 1000)==0:
-                print "Jumping [%d / %d] examples" % (cc, cidx)
+                print >>logfile,"Jumping [%d / %d] examples" % (cc, cidx)
             train.next()
 
     for epoch in xrange(max_epochs):
+        logfile.flush()
         time0 = time.time()
         n_samples = 0
         NaN_grad_cnt = 0
@@ -364,6 +366,7 @@ def train(
             cidx = 0
 
         for x, y in train:
+            logfile.flush()
         # NOTE : x, y are [sen1, sen2, sen3 ...] where sen_i are of different length
         # NOTE : at this time, x, y are simply python lists
         # NOTE : after prepare_data they get converted to numpy lists
@@ -378,13 +381,13 @@ def train(
                                                      maxlen_trg=maxlen_trg,
                                                     )
             if x is None:
-                # print 'Minibatch with zero sample under length ', maxlen
+                # print >>logfile,'Minibatch with zero sample under length ', maxlen
                 uidx -= 1
                 uidx = max(uidx, 0)
                 continue
 
             if uidx == 1 or ( numpy.mod(uidx, pbatchFreq) == 0 and pbatchFreq != -1 ):
-                pbatch(x, worddicts_r[0])
+                pbatch(x, worddicts_r[0], logfile=logfile)
 
 
             n_samples += n_x
@@ -419,14 +422,14 @@ def train(
                 continue
 
             if float(NaN_grad_cnt) > max_epochs * 0.5 or float(NaN_cost_cnt) > max_epochs * 0.5:
-                print 'Too many NaNs, abort training'
+                print >>logfile,'Too many NaNs, abort training'
                 return 1., 1., 1.
 
             # verbose
             if numpy.mod(uidx, dispFreq) == 0:
                 ud = time.time() - ud_start
                 wps = n_samples / float(time.time() - time0)
-                print 'Epoch ', eidx, 'Update ', uidx, 'Cost ', cost, 'NaN_in_grad', NaN_grad_cnt,\
+                print >>logfile,'Epoch ', eidx, 'Update ', uidx, 'Cost ', cost, 'NaN_in_grad', NaN_grad_cnt,\
                       'NaN_in_cost', NaN_cost_cnt, 'Gradient_clipped', clipped_cnt, 'UD ', ud, "%.2f sentences/s" % wps
                 ud_start = time.time()
 
@@ -444,20 +447,20 @@ def train(
                                                maxlen=maxlen_sample,
                                                stochastic=stochastic,
                                                argmax=False)
-                    print
-                    print 'Source ', jj, ': ',
+                    print >>logfile, ""
+                    print >>logfile,'Source ', jj, ': ',
                     if source_word_level:
                         for vv in x[:, jj]:
                             if vv == 0:
                                 break
                             if vv in worddicts_r[0]:
                                 if use_bpe:
-                                    print (worddicts_r[0][vv]).replace('@@', ''),
+                                    print >>logfile,(worddicts_r[0][vv]).replace('@@', ''),
                                 else:
-                                    print worddicts_r[0][vv],
+                                    print >>logfile,worddicts_r[0][vv],
                             else:
-                                print 'UNK',
-                        print
+                                print >>logfile,'UNK',
+                        print >>logfile, ""
                     else:
                         source_ = []
                         for ii, vv in enumerate(x[:, jj]):
@@ -468,20 +471,20 @@ def train(
                                 source_.append(worddicts_r[0][vv])
                             else:
                                 source_.append('UNK')
-                        print "".join(source_)
-                    print 'Truth ', jj, ' : ',
+                        print >>logfile,"".join(source_)
+                    print >>logfile,'Truth ', jj, ' : ',
                     if target_word_level:
                         for vv in y[:, jj]:
                             if vv == 0:
                                 break
                             if vv in worddicts_r[1]:
                                 if use_bpe:
-                                    print (worddicts_r[1][vv]).replace('@@', ''),
+                                    print >>logfile,(worddicts_r[1][vv]).replace('@@', ''),
                                 else:
-                                    print worddicts_r[1][vv],
+                                    print >>logfile,worddicts_r[1][vv],
                             else:
-                                print 'UNK',
-                        print
+                                print >>logfile,'UNK',
+                        print >>logfile, ""
                     else:
                         truth_ = []
                         for vv in y[:, jj]:
@@ -491,8 +494,8 @@ def train(
                                 truth_.append(worddicts_r[1][vv])
                             else:
                                 truth_.append('UNK')
-                        print "".join(truth_)
-                    print 'Sample ', jj, ': ',
+                        print >>logfile,"".join(truth_)
+                    print >>logfile,'Sample ', jj, ': ',
                     if stochastic:
                         ss = sample
                     else:
@@ -504,12 +507,12 @@ def train(
                                 break
                             if vv in worddicts_r[1]:
                                 if use_bpe:
-                                    print (worddicts_r[1][vv]).replace('@@', ''),
+                                    print >>logfile,(worddicts_r[1][vv]).replace('@@', ''),
                                 else:
-                                    print worddicts_r[1][vv],
+                                    print >>logfile,worddicts_r[1][vv],
                             else:
-                                print 'UNK',
-                        print
+                                print >>logfile,'UNK',
+                        print >>logfile, ""
                     else:
                         sample_ = []
                         for vv in ss:
@@ -519,8 +522,8 @@ def train(
                                 sample_.append(worddicts_r[1][vv])
                             else:
                                 sample_.append('UNK')
-                        print "".join(sample_)
-                    print
+                        print >>logfile,"".join(sample_)
+                    print >>logfile, ""
 
             # validate model on validation set and early stop if necessary
             if numpy.mod(uidx, validFreq) == 0:
@@ -550,7 +553,7 @@ def train(
                         numpy.array(history_errs)[:-patience].min() and patience != -1:
                     bad_counter += 1
                     if bad_counter > patience:
-                        print 'Early Stop!'
+                        print >>logfile,'Early Stop!'
                         estop = True
                         break
 
@@ -558,11 +561,11 @@ def train(
                     import ipdb
                     ipdb.set_trace()
 
-                print 'Valid ', valid_err
+                print >>logfile,'Valid ', valid_err
 
             # save the best model so far
             if numpy.mod(uidx, saveFreq) == 0:
-                print 'Saving...',
+                print >>logfile,'Saving...',
 
                 if not os.path.exists(model_path):
                     os.mkdir(model_path)
@@ -584,16 +587,16 @@ def train(
                         this_best_file_name = os.path.join(model_path, '%s.%d.best.npz' % (save_file_name, uidx))
                         numpy.savez(this_best_file_name, history_errs=history_errs, uidx=uidx, eidx=eidx,
                                     cidx=cidx, **best_p)
-                print 'Done...',
-                print 'Saved to %s' % file_name
-
+                print >>logfile,'Done...',
+                print >>logfile,'Saved to %s' % file_name
+            logfile.flush()
             # finish after this many updates
             if uidx >= finish_after and finish_after != -1:
-                print 'Finishing after %d iterations!' % uidx
+                print >>logfile,'Finishing after %d iterations!' % uidx
                 estop = True
                 break
 
-        print 'Seen %d samples' % n_samples
+        print >>logfile,'Seen %d samples' % n_samples
         eidx += 1
 
         if estop:
@@ -607,8 +610,8 @@ def train(
                            pool_stride,
                           ).mean()
 
-    print 'Valid ', valid_err
-
+    print >>logfile,'Valid ', valid_err
+    logfile.flush()
     params = unzip(tparams)
     optparams = unzip(toptparams)
     file_name = os.path.join(model_path, '%s.%d.npz' % (save_file_name, uidx))

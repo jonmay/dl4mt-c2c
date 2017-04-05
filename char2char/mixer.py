@@ -129,19 +129,16 @@ def load_params(path, params):
 
 
 def get_layer(name):
-    print("in get_layer")
     fns = layers[name]
-    print(fns[0], fns[1])
     return (eval(fns[0]), eval(fns[1]))
 
 # some utilities
-def ortho_weight(ndim, scale=0.01):
-    print("in ortho weight; getting random matrix of scale %d" % ndim)
+def ortho_weight(ndim, scale=0.01, logfile=sys.stdout):
+    print >>logfile, "in ortho weight; getting random matrix of scale %d" % ndim
     W = scale * numpy.random.randn(ndim, ndim)
-    print("running svd")
     start = time.time()
     u, s, v = numpy.linalg.svd(W)
-    print("returning: %f secs" % (time.time()-start))
+    print >>logfile, "returning: %f secs" % (time.time()-start)
     return u.astype('float32')
 
 
@@ -150,15 +147,12 @@ def norm_vector(nin, scale=0.01):
     return V.astype('float32')
 
 
-def norm_weight(nin, nout=None, scale=0.01, ortho=True):
-    print("in norm weight")
+def norm_weight(nin, nout=None, scale=0.01, ortho=True, logfile=sys.stdout):
     if nout is None:
         nout = nin
     if nout == nin and ortho:
-        print("getting ortho weight")
-        W = ortho_weight(nin)
+        W = ortho_weight(nin, logfile=logfile)
     else:
-        print("getting random weight")
         W = scale * numpy.random.randn(nin, nout)
     return W.astype('float32')
 
@@ -220,37 +214,37 @@ def param_init_fflayer(options, params, prefix='ff', nin=None, nout=None,
         nin = options['dim_proj']
     if nout is None:
         nout = options['dim_proj']
-    print("in param_init_fflayer; getting norm weight")
-    params[_p(prefix, 'W')] = norm_weight(nin, nout, scale=scale, ortho=ortho)
-    print("getting a zeros")
+    logfile=options['logfile']
+    params[_p(prefix, 'W')] = norm_weight(nin, nout, scale=scale, ortho=ortho, logfile=logfile)
     params[_p(prefix, 'b')] = numpy.zeros((nout,)).astype('float32')
-    print("returning")
     return params
 
 
 def fflayer(tparams, state_below, options, prefix='rconv',
             activ='lambda x: tensor.tanh(x)', **kwargs):
+    logfile=options['logfile']
     return eval(activ)(
         tensor.dot(state_below, tparams[_p(prefix, 'W')]) +
         tparams[_p(prefix, 'b')])
 
 def param_init_hwlayer(options, params, prefix='hw', dim=None):
-    print("in param_init_hwlayer")
+    logfile=options['logfile']
     param_init_fflayer(options, params, prefix, dim, dim)
-    params[_p(prefix, 'W_t')] = ortho_weight(dim)
+    params[_p(prefix, 'W_t')] = ortho_weight(dim, logfile=logfile)
     params[_p(prefix, 'b_t')] = numpy.zeros((dim,)).astype('float32')
-    print("done with param_init_hwlayer")
     return params
 
 # highway network
 def param_init_small_hwlayer(options, params, prefix='small_hw', dim=None):
+    logfile=options['logfile']
     #param_init_fflayer(options, params, prefix, dim, dim)
-    params[_p(prefix, 'W_t')] = ortho_weight(dim)
+    params[_p(prefix, 'W_t')] = ortho_weight(dim, logfile=logfile)
     params[_p(prefix, 'b_t')] = numpy.zeros((dim,)).astype('float32')
 
     return params
 
 def small_hwlayer(tparams, state_below, options, prefix='small_hw', **kwargs):
+    logfile=options['logfile']
     #W = tparams[_p(prefix, 'W')]
     #b = tparams[_p(prefix, 'b')]
     W_t = tparams[_p(prefix, 'W_t')]
@@ -264,7 +258,7 @@ def small_hwlayer(tparams, state_below, options, prefix='small_hw', **kwargs):
     return state_below*(1.0 - transform)
 
 def hwlayer(tparams, state_below, options, prefix='hw', **kwargs):
-    print("in hwlayer")
+    logfile=options['logfile']
     W = tparams[_p(prefix, 'W')]
     b = tparams[_p(prefix, 'b')]
     W_t = tparams[_p(prefix, 'W_t')]
@@ -273,7 +267,6 @@ def hwlayer(tparams, state_below, options, prefix='hw', **kwargs):
     output = tensor.nnet.relu( tensor.dot(state_below, W) + b )
     transform = tensor.nnet.sigmoid( bias + tensor.dot(state_below, W_t) + b_t )
     # state_below : maxlen/width X n_samples X dim_word_src
-    print("about to return from hwlayer")
     return output*transform + state_below*(1.0 - transform)
 
 # feedforward layer short-cut: affine transformation + point-wise nonlinearity
@@ -285,8 +278,9 @@ def param_init_ffflayer(options, params, prefix='fff', nin1=None, nin2=None, nou
         nin2 = options['dim_proj']
     if nout is None:
         nout = options['dim_proj']
-    params[_p(prefix, 'W')] = norm_weight(nin1, nout, scale=scale1, ortho=ortho)
-    params[_p(prefix, 'U')] = norm_weight(nin2, nout, scale=scale2, ortho=ortho)
+    logfile=options['logfile']
+    params[_p(prefix, 'W')] = norm_weight(nin1, nout, scale=scale1, ortho=ortho, logfile=logfile)
+    params[_p(prefix, 'U')] = norm_weight(nin2, nout, scale=scale2, ortho=ortho, logfile=logfile)
     params[_p(prefix, 'b')] = numpy.zeros((nout,)).astype('float32')
 
     return params
@@ -294,6 +288,7 @@ def param_init_ffflayer(options, params, prefix='fff', nin1=None, nin2=None, nou
 
 def ffflayer(tparams, state_below1, state_below2, options, prefix='rconv',
              activ='lambda x: tensor.tanh(x)', **kwargs):
+    logfile=options['logfile']
     return eval(activ)(
         tensor.dot(state_below1, tparams[_p(prefix, 'W')]) +
         tensor.dot(state_below2, tparams[_p(prefix, 'U')]) +
@@ -344,7 +339,7 @@ def grconv_encoder_step(step, state_below, Wl, Wr, bW, Gl, Gr, bG):
 
 # convolution layer
 def param_init_conv(options, params, prefix='conv_enc', dim=None, width=None, nkernels=None):
-
+    logfile=options['logfile']
     w_shp = (nkernels, dim, width, 1)
     w_bound = numpy.sqrt(dim * width * 1)
     convW = numpy.asarray(
@@ -376,34 +371,35 @@ def param_init_gru(options, params, prefix='gru', nin=None, dim=None):
     if dim is None:
         dim = options['rnn_dim']
         # dim = enc_dim
-
+    logfile = options['logfile']
     # embedding to gates transformation weights, biases
-    W = numpy.concatenate([norm_weight(nin, dim),
-                           norm_weight(nin, dim)], axis=1)
+    W = numpy.concatenate([norm_weight(nin, dim, logfile=logfile),
+                           norm_weight(nin, dim, logfile=logfile)], axis=1)
     params[_p(prefix, 'W')] = W
     params[_p(prefix, 'b')] = numpy.zeros((2 * dim,)).astype('float32')
     # W : dim_word_src X 2*enc_dim
     # b : 2*enc_dim
 
     # recurrent transformation weights for gates
-    U = numpy.concatenate([ortho_weight(dim),
-                           ortho_weight(dim)], axis=1)
+    U = numpy.concatenate([ortho_weight(dim, logfile=logfile),
+                           ortho_weight(dim, logfile=logfile)], axis=1)
     params[_p(prefix, 'U')] = U
     # U : enc_dim X 2*enc_dim
 
     # embedding to hidden state proposal weights, biases
-    Wx = norm_weight(nin, dim)
+    Wx = norm_weight(nin, dim, logfile=logfile)
     params[_p(prefix, 'Wx')] = Wx
     params[_p(prefix, 'bx')] = numpy.zeros((dim,)).astype('float32')
 
     # recurrent transformation weights for hidden state proposal
-    Ux = ortho_weight(dim)
+    Ux = ortho_weight(dim, logfile=logfile)
     params[_p(prefix, 'Ux')] = Ux
 
     return params
 
 def conv_encoder(tparams, state_below, options, prefix='conv_enc',
           one_step=False, init_state=None, width=None, nkernels=None, pool_window=None, pool_stride=None, **kwargs):
+    logfile=options['logfile']
     # state_below : maxlen X n_samples X dim_word_src
     # mask : maxlen X n_samples
     # data = (n_samples, dim, maxlen, 1)
@@ -448,7 +444,7 @@ def param_init_multi_scale_conv(options, params, prefix='conv_enc', dim=None, wi
 
     # we have nkernels[0] many kernels of width width[0], nkernels[1] many kernels of width width[1], and so on.
     assert len(width) == len(nkernels)
-
+    logfile=options['logfile']
     w_shp = [(n, dim, w, 1) for (w, n) in zip(width, nkernels)]
     w_bound = [numpy.sqrt(dim * w * 1) for w in width]
 
@@ -486,7 +482,7 @@ def multi_scale_conv_encoder(tparams, state_below, options, prefix='conv_enc',
     # state_below.shape = (maxlen_x_pad + 2*pool_stride, n_samples, dim_word_src)
     # mask.shape = (maxlen_x_pad/pool_stride, n_samples)
     assert len(width) == len(nkernels)
-
+    logfile=options['logfile']
     data = state_below.dimshuffle(1,2,0,'x')
     # data.shape = (n_samples, dim_word_src, maxlen_x_pad + 2*pool_stride, 1)
 
@@ -521,6 +517,7 @@ def multi_scale_conv_encoder(tparams, state_below, options, prefix='conv_enc',
 def gru_layer(tparams, state_below, options, prefix='gru',
               mask=None, one_step=False, init_state=None, **kwargs):
 
+    logfile=options['logfile']
     if one_step:
         assert init_state, 'previous state must be provided'
 
@@ -631,43 +628,44 @@ def param_init_two_layer_gru(options, params, prefix='two_layer_gru', nin=None, 
         dim1 = options['rnn_dim']
     if dim2 is None:
         dim2 = options['rnn_dim']
-
-    W1 = numpy.concatenate([norm_weight(nin, dim1),
-                           norm_weight(nin, dim1)], axis=1)
+    logfile = options['logfile']
+    W1 = numpy.concatenate([norm_weight(nin, dim1, logfile=logfile),
+                           norm_weight(nin, dim1, logfile=logfile)], axis=1)
     params[_p(prefix, 'W1')] = W1
     params[_p(prefix, 'b1')] = numpy.zeros((2 * dim1,)).astype('float32')
 
-    U1 = numpy.concatenate([ortho_weight(dim1),
-                           ortho_weight(dim1)], axis=1)
+    U1 = numpy.concatenate([ortho_weight(dim1, logfile=logfile),
+                           ortho_weight(dim1, logfile=logfile)], axis=1)
     params[_p(prefix, 'U1')] = U1
 
-    Wx1 = norm_weight(nin, dim1)
+    Wx1 = norm_weight(nin, dim1, logfile=logfile)
     params[_p(prefix, 'Wx1')] = Wx1
     params[_p(prefix, 'bx1')] = numpy.zeros((dim1,)).astype('float32')
 
-    Ux1 = ortho_weight(dim1)
+    Ux1 = ortho_weight(dim1, logfile=logfile)
     params[_p(prefix, 'Ux1')] = Ux1
 
-    W2 = numpy.concatenate([norm_weight(dim1, dim2),
-                           norm_weight(dim1, dim2)], axis=1)
+    W2 = numpy.concatenate([norm_weight(dim1, dim2, logfile=logfile),
+                           norm_weight(dim1, dim2, logfile=logfile)], axis=1)
     params[_p(prefix, 'W2')] = W2
     params[_p(prefix, 'b2')] = numpy.zeros((2 * dim2,)).astype('float32')
 
-    U2 = numpy.concatenate([ortho_weight(dim2),
-                           ortho_weight(dim2)], axis=1)
+    U2 = numpy.concatenate([ortho_weight(dim2, logfile=logfile),
+                           ortho_weight(dim2, logfile=logfile)], axis=1)
     params[_p(prefix, 'U2')] = U2
 
-    Wx2 = norm_weight(dim1, dim2)
+    Wx2 = norm_weight(dim1, dim2, logfile=logfile)
     params[_p(prefix, 'Wx2')] = Wx2
     params[_p(prefix, 'bx2')] = numpy.zeros((dim2,)).astype('float32')
 
-    Ux2 = ortho_weight(dim2)
+    Ux2 = ortho_weight(dim2, logfile=logfile)
     params[_p(prefix, 'Ux2')] = Ux2
 
     return params
 
 def two_layer_gru(tparams, state_below, options, prefix='two_layer_gru', mask=None, one_step=False, init_state1=None, init_state2=None, **kwargs):
 
+    logfile=options['logfile']
     if one_step:
         assert init_state, 'previous state must be provided'
 
@@ -793,17 +791,17 @@ def param_init_lngru(options, params, prefix='lngru', nin=None, dim=None):
         nin = options['dim_proj']
     if dim == None:
         dim = options['dim_proj']
-
-    W = numpy.concatenate([norm_weight(nin,dim), norm_weight(nin,dim)], axis=1)
+    logfile=options['logfile']
+    W = numpy.concatenate([norm_weight(nin,dim, logfile=logfile), norm_weight(nin,dim, logfile=logfile)], axis=1)
     params[_p(prefix,'W')] = W
     params[_p(prefix,'b')] = numpy.zeros((2 * dim,)).astype('float32')
-    U = numpy.concatenate([ortho_weight(dim),
-                           ortho_weight(dim)], axis=1)
+    U = numpy.concatenate([ortho_weight(dim, logfile=logfile),
+                           ortho_weight(dim, logfile=logfile)], axis=1)
     params[_p(prefix,'U')] = U
 
-    Wx = norm_weight(nin, dim)
+    Wx = norm_weight(nin, dim, logfile=logfile)
     params[_p(prefix,'Wx')] = Wx
-    Ux = ortho_weight(dim)
+    Ux = ortho_weight(dim, logfile=logfile)
     params[_p(prefix,'Ux')] = Ux
     params[_p(prefix,'bx')] = numpy.zeros((dim,)).astype('float32')
 
@@ -826,6 +824,7 @@ def lngru_layer(tparams, state_below, options, prefix='lngru',
     """
     Feedforward pass through GRU with LN
     """
+    logfile=options['logfile']
     nsteps = state_below.shape[0]
     if state_below.ndim == 3:
         n_samples = state_below.shape[1]
@@ -905,15 +904,15 @@ def param_init_gru_decoder(options, params, prefix='gru_decoder', nin=None,
         dim = options['dim']
     if dimctx is None:
         dimctx = options['dim']
-
+    logfile=options['logfile']
     params = param_init_gru(options, params, prefix, nin=nin, dim=dim)
 
     # context to GRU gates
-    Wc = norm_weight(dimctx, dim*2)
+    Wc = norm_weight(dimctx, dim*2, logfile=logfile)
     params[_p(prefix, 'Wc')] = Wc
 
     # context to hidden proposal
-    Wcx = norm_weight(dimctx, dim)
+    Wcx = norm_weight(dimctx, dim, logfile=logfile)
     params[_p(prefix, 'Wcx')] = Wcx
 
     return params
@@ -1013,26 +1012,26 @@ def param_init_gru_cond_decoder(options, params, prefix='gru_cond_decoder',
         dim = options['dim']
     if dimctx is None:
         dimctx = options['dim']
-
+    logfile=options['logfile']
     params = param_init_gru(options, params, prefix, nin=nin, dim=dim)
 
     # context to LSTM
-    Wc = norm_weight(dimctx, dim*2)
+    Wc = norm_weight(dimctx, dim*2, logfile=logfile)
     params[_p(prefix, 'Wc')] = Wc
 
-    Wcx = norm_weight(dimctx, dim)
+    Wcx = norm_weight(dimctx, dim, logfile=logfile)
     params[_p(prefix, 'Wcx')] = Wcx
 
     # attention: prev -> hidden
-    Wi_att = norm_weight(nin, dimctx)
+    Wi_att = norm_weight(nin, dimctx, logfile=logfile)
     params[_p(prefix, 'Wi_att')] = Wi_att
 
     # attention: context -> hidden
-    Wc_att = norm_weight(dimctx)
+    Wc_att = norm_weight(dimctx, logfile=logfile)
     params[_p(prefix, 'Wc_att')] = Wc_att
 
     # attention: LSTM -> hidden
-    Wd_att = norm_weight(dim, dimctx)
+    Wd_att = norm_weight(dim, dimctx, logfile=logfile)
     params[_p(prefix, 'Wd_att')] = Wd_att
 
     # attention: hidden bias
@@ -1040,7 +1039,7 @@ def param_init_gru_cond_decoder(options, params, prefix='gru_cond_decoder',
     params[_p(prefix, 'b_att')] = b_att
 
     # attention:
-    U_att = norm_weight(dimctx, 1)
+    U_att = norm_weight(dimctx, 1, logfile=logfile)
     params[_p(prefix, 'U_att')] = U_att
     c_att = numpy.zeros((1,)).astype('float32')
     params[_p(prefix, 'c_tt')] = c_att
@@ -1052,6 +1051,7 @@ def gru_cond_decoder(tparams, state_below, options, prefix='gru_cond_decoder',
                      mask=None, context=None, one_step=False, init_state=None,
                      context_mask=None, **kwargs):
 
+    logfile=options['logfile']
     assert context, 'Context must be provided'
     assert context.ndim == 3, \
         'Context must be 3-d: #annotation x #sample x dim'
@@ -1187,81 +1187,82 @@ def param_init_two_layer_gru_decoder(options, params,
     if dimctx is None:
         dimctx = options['enc_dim'] * 2
 
+    logfile = options['logfile']
     # embedding to gates transformation weights, biases
-    W_xc = numpy.concatenate([norm_weight(nin, dim_char),
-                           norm_weight(nin, dim_char)], axis=1)
+    W_xc = numpy.concatenate([norm_weight(nin, dim_char, logfile=logfile),
+                           norm_weight(nin, dim_char, logfile=logfile)], axis=1)
     params[_p(prefix, 'W_xc')] = W_xc
     params[_p(prefix, 'b_c')] = numpy.zeros((2 * dim_char,)).astype('float32')
 
     # recurrent transformation weights for gates
-    U_cc = numpy.concatenate([ortho_weight(dim_char),
-                           ortho_weight(dim_char)], axis=1)
+    U_cc = numpy.concatenate([ortho_weight(dim_char, logfile=logfile),
+                           ortho_weight(dim_char, logfile=logfile)], axis=1)
     params[_p(prefix, 'U_cc')] = U_cc
 
     # embedding to hidden state proposal weights, biases
-    Wx_xc = norm_weight(nin, dim_char)
+    Wx_xc = norm_weight(nin, dim_char, logfile=logfile)
     params[_p(prefix, 'Wx_xc')] = Wx_xc
     params[_p(prefix, 'bx_c')] = numpy.zeros((dim_char,)).astype('float32')
 
     # recurrent transformation weights for hidden state proposal
-    Ux_cc = ortho_weight(dim_char)
+    Ux_cc = ortho_weight(dim_char, logfile=logfile)
     params[_p(prefix, 'Ux_cc')] = Ux_cc
 
     # embedding to gates transformation weights, biases
-    W_cw = numpy.concatenate([norm_weight(dim_char, dim_word),
-                              norm_weight(dim_char, dim_word)], axis=1)
+    W_cw = numpy.concatenate([norm_weight(dim_char, dim_word, logfile=logfile),
+                              norm_weight(dim_char, dim_word, logfile=logfile)], axis=1)
     params[_p(prefix, 'W_cw')] = W_cw
     params[_p(prefix, 'b_w')] = numpy.zeros((2 * dim_word,)).astype('float32')
 
     # recurrent transformation weights for gates
-    U_ww = numpy.concatenate([ortho_weight(dim_word),
-                              ortho_weight(dim_word)], axis=1)
+    U_ww = numpy.concatenate([ortho_weight(dim_word, logfile=logfile),
+                              ortho_weight(dim_word, logfile=logfile)], axis=1)
     params[_p(prefix, 'U_ww')] = U_ww
 
     # embedding to hidden state proposal weights, biases
-    Wx_cw = norm_weight(dim_char, dim_word)
+    Wx_cw = norm_weight(dim_char, dim_word, logfile=logfile)
     params[_p(prefix, 'Wx_cw')] = Wx_cw
     params[_p(prefix, 'bx_w')] = numpy.zeros((dim_word,)).astype('float32')
 
     # recurrent transformation weights for hidden state proposal
-    Ux_ww = ortho_weight(dim_word)
+    Ux_ww = ortho_weight(dim_word, logfile=logfile)
     params[_p(prefix, 'Ux_ww')] = Ux_ww
 
     # context to GRU gates: char-level
-    W_ctxc = numpy.concatenate([norm_weight(dimctx, dim_char),
-                                norm_weight(dimctx, dim_char)], axis=1)
+    W_ctxc = numpy.concatenate([norm_weight(dimctx, dim_char, logfile=logfile),
+                                norm_weight(dimctx, dim_char, logfile=logfile)], axis=1)
     params[_p(prefix, 'W_ctxc')] = W_ctxc
 
     # context to hidden proposal: char-level
-    Wx_ctxc = norm_weight(dimctx, dim_char)
+    Wx_ctxc = norm_weight(dimctx, dim_char, logfile=logfile)
     params[_p(prefix, 'Wx_ctxc')] = Wx_ctxc
 
     # context to GRU gates: word-level
-    W_ctxw = numpy.concatenate([norm_weight(dimctx, dim_word),
-                                norm_weight(dimctx, dim_word)], axis=1)
+    W_ctxw = numpy.concatenate([norm_weight(dimctx, dim_word, logfile=logfile),
+                                norm_weight(dimctx, dim_word, logfile=logfile)], axis=1)
     params[_p(prefix, 'W_ctxw')] = W_ctxw
 
     # context to hidden proposal: word-level
-    Wx_ctxw = norm_weight(dimctx, dim_word)
+    Wx_ctxw = norm_weight(dimctx, dim_word, logfile=logfile)
     params[_p(prefix, 'Wx_ctxw')] = Wx_ctxw
 
     # attention: prev -> hidden
-    Winp_att = norm_weight(nin, dimctx)
+    Winp_att = norm_weight(nin, dimctx, logfile=logfile)
     params[_p(prefix, 'Winp_att')] = Winp_att
 
     # attention: context -> hidden
-    Wctx_att = norm_weight(dimctx)
+    Wctx_att = norm_weight(dimctx, logfile=logfile)
     params[_p(prefix, 'Wctx_att')] = Wctx_att
 
     # attention: decoder -> hidden
-    Wdec_att = norm_weight(dim_word, dimctx)
+    Wdec_att = norm_weight(dim_word, dimctx, logfile=logfile)
     params[_p(prefix, 'Wdec_att')] = Wdec_att
 
     # attention: hidden bias
     params[_p(prefix, 'b_att')] = numpy.zeros((dimctx,)).astype('float32')
 
     # attention
-    U_att = norm_weight(dimctx, 1)
+    U_att = norm_weight(dimctx, 1, logfile=logfile)
     params[_p(prefix, 'U_att')] = U_att
     c_att = numpy.zeros((1,)).astype('float32')
     params[_p(prefix, 'c_att')] = c_att
@@ -1275,7 +1276,7 @@ def two_layer_gru_decoder(tparams, state_below, options,
                           context=None, context_mask=None,
                           init_state_char=None, init_state_word=None,
                           **kwargs):
-
+    logfile=options['logfile']
     assert context, 'Context must be provided'
     assert context.ndim == 3, \
         'Context must be 3-D: #annotation x #sample x #dim'
@@ -1453,83 +1454,84 @@ def param_init_two_layer_gru_decoder_both(options, params,
     if dimctx is None:
         dimctx = options['enc_dim'] * 2
 
+    logfile = options['logfile']
     # embedding to gates transformation weights, biases
-    W_xc = numpy.concatenate([norm_weight(nin, dim_char),
-                           norm_weight(nin, dim_char)], axis=1)
+    W_xc = numpy.concatenate([norm_weight(nin, dim_char, logfile=logfile),
+                           norm_weight(nin, dim_char, logfile=logfile)], axis=1)
     params[_p(prefix, 'W_xc')] = W_xc
     params[_p(prefix, 'b_c')] = numpy.zeros((2 * dim_char,)).astype('float32')
 
     # recurrent transformation weights for gates
-    U_cc = numpy.concatenate([ortho_weight(dim_char),
-                           ortho_weight(dim_char)], axis=1)
+    U_cc = numpy.concatenate([ortho_weight(dim_char, logfile=logfile),
+                           ortho_weight(dim_char, logfile=logfile)], axis=1)
     params[_p(prefix, 'U_cc')] = U_cc
 
     # embedding to hidden state proposal weights, biases
-    Wx_xc = norm_weight(nin, dim_char)
+    Wx_xc = norm_weight(nin, dim_char, logfile=logfile)
     params[_p(prefix, 'Wx_xc')] = Wx_xc
     params[_p(prefix, 'bx_c')] = numpy.zeros((dim_char,)).astype('float32')
 
     # recurrent transformation weights for hidden state proposal
-    Ux_cc = ortho_weight(dim_char)
+    Ux_cc = ortho_weight(dim_char, logfile=logfile)
     params[_p(prefix, 'Ux_cc')] = Ux_cc
 
     # embedding to gates transformation weights, biases
-    W_cw = numpy.concatenate([norm_weight(dim_char, dim_word),
-                              norm_weight(dim_char, dim_word)], axis=1)
+    W_cw = numpy.concatenate([norm_weight(dim_char, dim_word, logfile=logfile),
+                              norm_weight(dim_char, dim_word, logfile=logfile)], axis=1)
     params[_p(prefix, 'W_cw')] = W_cw
     params[_p(prefix, 'b_w')] = numpy.zeros((2 * dim_word,)).astype('float32')
 
     # recurrent transformation weights for gates
-    U_ww = numpy.concatenate([ortho_weight(dim_word),
-                              ortho_weight(dim_word)], axis=1)
+    U_ww = numpy.concatenate([ortho_weight(dim_word, logfile=logfile),
+                              ortho_weight(dim_word, logfile=logfile)], axis=1)
     params[_p(prefix, 'U_ww')] = U_ww
 
     # embedding to hidden state proposal weights, biases
-    Wx_cw = norm_weight(dim_char, dim_word)
+    Wx_cw = norm_weight(dim_char, dim_word, logfile=logfile)
     params[_p(prefix, 'Wx_cw')] = Wx_cw
     params[_p(prefix, 'bx_w')] = numpy.zeros((dim_word,)).astype('float32')
 
     # recurrent transformation weights for hidden state proposal
-    Ux_ww = ortho_weight(dim_word)
+    Ux_ww = ortho_weight(dim_word, logfile=logfile)
     params[_p(prefix, 'Ux_ww')] = Ux_ww
 
     # context to GRU gates: char-level
-    W_ctxc = numpy.concatenate([norm_weight(dimctx, dim_char),
-                                norm_weight(dimctx, dim_char)], axis=1)
+    W_ctxc = numpy.concatenate([norm_weight(dimctx, dim_char, logfile=logfile),
+                                norm_weight(dimctx, dim_char, logfile=logfile)], axis=1)
     params[_p(prefix, 'W_ctxc')] = W_ctxc
 
     # context to hidden proposal: char-level
-    Wx_ctxc = norm_weight(dimctx, dim_char)
+    Wx_ctxc = norm_weight(dimctx, dim_char, logfile=logfile)
     params[_p(prefix, 'Wx_ctxc')] = Wx_ctxc
 
     # context to GRU gates: word-level
-    W_ctxw = numpy.concatenate([norm_weight(dimctx, dim_word),
-                                norm_weight(dimctx, dim_word)], axis=1)
+    W_ctxw = numpy.concatenate([norm_weight(dimctx, dim_word, logfile=logfile),
+                                norm_weight(dimctx, dim_word, logfile=logfile)], axis=1)
     params[_p(prefix, 'W_ctxw')] = W_ctxw
 
     # context to hidden proposal: word-level
-    Wx_ctxw = norm_weight(dimctx, dim_word)
+    Wx_ctxw = norm_weight(dimctx, dim_word, logfile=logfile)
     params[_p(prefix, 'Wx_ctxw')] = Wx_ctxw
 
     # attention: prev -> hidden
-    Winp_att = norm_weight(nin, dimctx)
+    Winp_att = norm_weight(nin, dimctx, logfile=logfile)
     params[_p(prefix, 'Winp_att')] = Winp_att
 
     # attention: context -> hidden
-    Wctx_att = norm_weight(dimctx)
+    Wctx_att = norm_weight(dimctx, logfile=logfile)
     params[_p(prefix, 'Wctx_att')] = Wctx_att
 
     # attention: decoder -> hidden
-    Wdecc_att = norm_weight(dim_char, dimctx)
+    Wdecc_att = norm_weight(dim_char, dimctx, logfile=logfile)
     params[_p(prefix, 'Wdecc_att')] = Wdecc_att
-    Wdecw_att = norm_weight(dim_word, dimctx)
+    Wdecw_att = norm_weight(dim_word, dimctx, logfile=logfile)
     params[_p(prefix, 'Wdecw_att')] = Wdecw_att
 
     # attention: hidden bias
     params[_p(prefix, 'b_att')] = numpy.zeros((dimctx,)).astype('float32')
 
     # attention
-    U_att = norm_weight(dimctx, 1)
+    U_att = norm_weight(dimctx, 1, logfile=logfile)
     params[_p(prefix, 'U_att')] = U_att
     c_att = numpy.zeros((1,)).astype('float32')
     params[_p(prefix, 'c_att')] = c_att
@@ -1543,7 +1545,7 @@ def two_layer_gru_decoder_both(tparams, state_below, options,
                                context=None, context_mask=None,
                                init_state_char=None, init_state_word=None,
                                **kwargs):
-
+    logfile=options['logfile']
     assert context, 'Context must be provided'
     assert context.ndim == 3, \
         'Context must be 3-D: #annotation x #sample x #dim'
@@ -1721,13 +1723,13 @@ def param_init_biscale_decoder(options, params,
         dim_word = options['dec_dim']
     if dimctx is None:
         dimctx = options['enc_dim'] * 2
-
+    logfile=options['logfile']
     # embedding to gates transformation weights, biases
     if scalar_bound:
         W_xc = norm_vector(nin)
         params[_p(prefix, 'b_c')] = numpy.zeros((1,)).astype('float32')
     else:
-        W_xc = norm_weight(nin, dim_char)
+        W_xc = norm_weight(nin, dim_char, logfile=logfile)
         params[_p(prefix, 'b_c')] = numpy.zeros((dim_char,)).astype('float32')
     params[_p(prefix, 'W_xc')] = W_xc
 
@@ -1736,20 +1738,20 @@ def param_init_biscale_decoder(options, params,
         U_cc = norm_vector(dim_char)
         U_wc = norm_vector(dim_char)
     else:
-        U_cc = ortho_weight(dim_char)
-        U_wc = ortho_weight(dim_char)
+        U_cc = ortho_weight(dim_char, logfile=logfile)
+        U_wc = ortho_weight(dim_char, logfile=logfile)
     params[_p(prefix, 'U_cc')] = U_cc
     params[_p(prefix, 'U_wc')] = U_wc
 
     # embedding to hidden state proposal weights, biases
-    Wx_xc = norm_weight(nin, dim_char)
+    Wx_xc = norm_weight(nin, dim_char, logfile=logfile)
     params[_p(prefix, 'Wx_xc')] = Wx_xc
     params[_p(prefix, 'bx_c')] = numpy.zeros((dim_char,)).astype('float32')
 
     # recurrent transformation weights for hidden state proposal
-    Ux_cc = ortho_weight(dim_char)
+    Ux_cc = ortho_weight(dim_char, logfile=logfile)
     params[_p(prefix, 'Ux_cc')] = Ux_cc
-    Ux_wc = ortho_weight(dim_char)
+    Ux_wc = ortho_weight(dim_char, logfile=logfile)
     params[_p(prefix, 'Ux_wc')] = Ux_wc
 
     # embedding to gates transformation weights, biases
@@ -1757,7 +1759,7 @@ def param_init_biscale_decoder(options, params,
         W_cw = norm_vector(dim_char)
         params[_p(prefix, 'b_w')] = numpy.zeros((1,)).astype('float32')
     else:
-        W_cw = norm_weight(dim_char, dim_word)
+        W_cw = norm_weight(dim_char, dim_word, logfile=logfile)
         params[_p(prefix, 'b_w')] = numpy.zeros((dim_word,)).astype('float32')
     params[_p(prefix, 'W_cw')] = W_cw
 
@@ -1765,57 +1767,57 @@ def param_init_biscale_decoder(options, params,
     if scalar_bound:
         U_ww = norm_vector(dim_word)
     else:
-        U_ww = ortho_weight(dim_word)
+        U_ww = ortho_weight(dim_word, logfile=logfile)
     params[_p(prefix, 'U_ww')] = U_ww
 
     # embedding to hidden state proposal weights, biases
-    Wx_cw = norm_weight(dim_char, dim_word)
+    Wx_cw = norm_weight(dim_char, dim_word, logfile=logfile)
     params[_p(prefix, 'Wx_cw')] = Wx_cw
     params[_p(prefix, 'bx_w')] = numpy.zeros((dim_word,)).astype('float32')
 
     # recurrent transformation weights for hidden state proposal
-    Ux_ww = ortho_weight(dim_word)
+    Ux_ww = ortho_weight(dim_word, logfile=logfile)
     params[_p(prefix, 'Ux_ww')] = Ux_ww
 
     # context to GRU gates: char-level
     if scalar_bound:
         W_ctxc = norm_vector(dimctx)
     else:
-        W_ctxc = norm_weight(dimctx, dim_char)
+        W_ctxc = norm_weight(dimctx, dim_char, logfile=logfile)
     params[_p(prefix, 'W_ctxc')] = W_ctxc
 
     # context to hidden proposal: char-level
-    Wx_ctxc = norm_weight(dimctx, dim_char)
+    Wx_ctxc = norm_weight(dimctx, dim_char, logfile=logfile)
     params[_p(prefix, 'Wx_ctxc')] = Wx_ctxc
 
     # context to GRU gates: word-level
     if scalar_bound:
         W_ctxw = norm_vector(dimctx)
     else:
-        W_ctxw = norm_weight(dimctx, dim_word)
+        W_ctxw = norm_weight(dimctx, dim_word, logfile=logfile)
     params[_p(prefix, 'W_ctxw')] = W_ctxw
 
     # context to hidden proposal: word-level
-    Wx_ctxw = norm_weight(dimctx, dim_word)
+    Wx_ctxw = norm_weight(dimctx, dim_word, logfile=logfile)
     params[_p(prefix, 'Wx_ctxw')] = Wx_ctxw
 
     # attention: prev -> hidden
-    Winp_att = norm_weight(nin, dimctx)
+    Winp_att = norm_weight(nin, dimctx, logfile=logfile)
     params[_p(prefix, 'Winp_att')] = Winp_att
 
     # attention: context -> hidden
-    Wctx_att = norm_weight(dimctx)
+    Wctx_att = norm_weight(dimctx, logfile=logfile)
     params[_p(prefix, 'Wctx_att')] = Wctx_att
 
     # attention: decoder -> hidden
-    Wdec_att = norm_weight(dim_word, dimctx)
+    Wdec_att = norm_weight(dim_word, dimctx, logfile=logfile)
     params[_p(prefix, 'Wdec_att')] = Wdec_att
 
     # attention: hidden bias
     params[_p(prefix, 'b_att')] = numpy.zeros((dimctx,)).astype('float32')
 
     # attention
-    U_att = norm_weight(dimctx, 1)
+    U_att = norm_weight(dimctx, 1, logfile=logfile)
     params[_p(prefix, 'U_att')] = U_att
     c_att = numpy.zeros((1,)).astype('float32')
     params[_p(prefix, 'c_att')] = c_att
@@ -1831,7 +1833,7 @@ def biscale_decoder(tparams, state_below, options,
                     init_bound_char=None, init_bound_word=None,
                     scalar_bound=False,
                     **kwargs):
-
+    logfile=options['logfile']
     assert context, 'Context must be provided'
     assert context.ndim == 3, \
         'Context must be 3-D: #annotation x #sample x #dim'
@@ -2041,13 +2043,13 @@ def param_init_biscale_decoder_attc(options, params,
         dim_word = options['dec_dim']
     if dimctx is None:
         dimctx = options['enc_dim'] * 2
-
+    logfile=options['logfile']
     # embedding to gates transformation weights, biases
     if scalar_bound:
         W_xc = norm_vector(nin)
         params[_p(prefix, 'b_c')] = numpy.zeros((1,)).astype('float32')
     else:
-        W_xc = norm_weight(nin, dim_char)
+        W_xc = norm_weight(nin, dim_char, logfile=logfile)
         params[_p(prefix, 'b_c')] = numpy.zeros((dim_char,)).astype('float32')
     params[_p(prefix, 'W_xc')] = W_xc
 
@@ -2056,20 +2058,20 @@ def param_init_biscale_decoder_attc(options, params,
         U_cc = norm_vector(dim_char)
         U_wc = norm_vector(dim_char)
     else:
-        U_cc = ortho_weight(dim_char)
-        U_wc = ortho_weight(dim_char)
+        U_cc = ortho_weight(dim_char, logfile=logfile)
+        U_wc = ortho_weight(dim_char, logfile=logfile)
     params[_p(prefix, 'U_cc')] = U_cc
     params[_p(prefix, 'U_wc')] = U_wc
 
     # embedding to hidden state proposal weights, biases
-    Wx_xc = norm_weight(nin, dim_char)
+    Wx_xc = norm_weight(nin, dim_char, logfile=logfile)
     params[_p(prefix, 'Wx_xc')] = Wx_xc
     params[_p(prefix, 'bx_c')] = numpy.zeros((dim_char,)).astype('float32')
 
     # recurrent transformation weights for hidden state proposal
-    Ux_cc = ortho_weight(dim_char)
+    Ux_cc = ortho_weight(dim_char, logfile=logfile)
     params[_p(prefix, 'Ux_cc')] = Ux_cc
-    Ux_wc = ortho_weight(dim_char)
+    Ux_wc = ortho_weight(dim_char, logfile=logfile)
     params[_p(prefix, 'Ux_wc')] = Ux_wc
 
     # embedding to gates transformation weights, biases
@@ -2077,7 +2079,7 @@ def param_init_biscale_decoder_attc(options, params,
         W_cw = norm_vector(dim_char)
         params[_p(prefix, 'b_w')] = numpy.zeros((1,)).astype('float32')
     else:
-        W_cw = norm_weight(dim_char, dim_word)
+        W_cw = norm_weight(dim_char, dim_word, logfile=logfile)
         params[_p(prefix, 'b_w')] = numpy.zeros((dim_word,)).astype('float32')
     params[_p(prefix, 'W_cw')] = W_cw
 
@@ -2085,57 +2087,57 @@ def param_init_biscale_decoder_attc(options, params,
     if scalar_bound:
         U_ww = norm_vector(dim_word)
     else:
-        U_ww = ortho_weight(dim_word)
+        U_ww = ortho_weight(dim_word, logfile=logfile)
     params[_p(prefix, 'U_ww')] = U_ww
 
     # embedding to hidden state proposal weights, biases
-    Wx_cw = norm_weight(dim_char, dim_word)
+    Wx_cw = norm_weight(dim_char, dim_word, logfile=logfile)
     params[_p(prefix, 'Wx_cw')] = Wx_cw
     params[_p(prefix, 'bx_w')] = numpy.zeros((dim_word,)).astype('float32')
 
     # recurrent transformation weights for hidden state proposal
-    Ux_ww = ortho_weight(dim_word)
+    Ux_ww = ortho_weight(dim_word, logfile=logfile)
     params[_p(prefix, 'Ux_ww')] = Ux_ww
 
     # context to GRU gates: char-level
     if scalar_bound:
         W_ctxc = norm_vector(dimctx)
     else:
-        W_ctxc = norm_weight(dimctx, dim_char)
+        W_ctxc = norm_weight(dimctx, dim_char, logfile=logfile)
     params[_p(prefix, 'W_ctxc')] = W_ctxc
 
     # context to hidden proposal: char-level
-    Wx_ctxc = norm_weight(dimctx, dim_char)
+    Wx_ctxc = norm_weight(dimctx, dim_char, logfile=logfile)
     params[_p(prefix, 'Wx_ctxc')] = Wx_ctxc
 
     # context to GRU gates: word-level
     if scalar_bound:
         W_ctxw = norm_vector(dimctx)
     else:
-        W_ctxw = norm_weight(dimctx, dim_word)
+        W_ctxw = norm_weight(dimctx, dim_word, logfile=logfile)
     params[_p(prefix, 'W_ctxw')] = W_ctxw
 
     # context to hidden proposal: word-level
-    Wx_ctxw = norm_weight(dimctx, dim_word)
+    Wx_ctxw = norm_weight(dimctx, dim_word, logfile=logfile)
     params[_p(prefix, 'Wx_ctxw')] = Wx_ctxw
 
     # attention: prev -> hidden
-    Winp_att = norm_weight(nin, dimctx)
+    Winp_att = norm_weight(nin, dimctx, logfile=logfile)
     params[_p(prefix, 'Winp_att')] = Winp_att
 
     # attention: context -> hidden
-    Wctx_att = norm_weight(dimctx)
+    Wctx_att = norm_weight(dimctx, logfile=logfile)
     params[_p(prefix, 'Wctx_att')] = Wctx_att
 
     # attention: decoder -> hidden
-    Wdec_att = norm_weight(dim_char, dimctx)
+    Wdec_att = norm_weight(dim_char, dimctx, logfile=logfile)
     params[_p(prefix, 'Wdec_att')] = Wdec_att
 
     # attention: hidden bias
     params[_p(prefix, 'b_att')] = numpy.zeros((dimctx,)).astype('float32')
 
     # attention
-    U_att = norm_weight(dimctx, 1)
+    U_att = norm_weight(dimctx, 1, logfile=logfile)
     params[_p(prefix, 'U_att')] = U_att
     c_att = numpy.zeros((1,)).astype('float32')
     params[_p(prefix, 'c_att')] = c_att
@@ -2151,7 +2153,7 @@ def biscale_decoder_attc(tparams, state_below, options,
                          init_bound_char=None, init_bound_word=None,
                          scalar_bound=False,
                          **kwargs):
-
+    logfile=options['logfile']
     assert context, 'Context must be provided'
     assert context.ndim == 3, \
         'Context must be 3-D: #annotation x #sample x #dim'
@@ -2361,13 +2363,13 @@ def param_init_biscale_decoder_both(options, params,
         dim_word = options['dec_dim']
     if dimctx is None:
         dimctx = options['enc_dim'] * 2
-
+    logfile=options['logfile']
     # embedding to gates transformation weights, biases
     if scalar_bound:
         W_xc = norm_vector(nin)
         params[_p(prefix, 'b_c')] = numpy.zeros((1,)).astype('float32')
     else:
-        W_xc = norm_weight(nin, dim_char)
+        W_xc = norm_weight(nin, dim_char, logfile=logfile)
         params[_p(prefix, 'b_c')] = numpy.zeros((dim_char,)).astype('float32')
     params[_p(prefix, 'W_xc')] = W_xc
 
@@ -2376,20 +2378,20 @@ def param_init_biscale_decoder_both(options, params,
         U_cc = norm_vector(dim_char)
         U_wc = norm_vector(dim_char)
     else:
-        U_cc = ortho_weight(dim_char)
-        U_wc = ortho_weight(dim_char)
+        U_cc = ortho_weight(dim_char, logfile=logfile)
+        U_wc = ortho_weight(dim_char, logfile=logfile)
     params[_p(prefix, 'U_cc')] = U_cc
     params[_p(prefix, 'U_wc')] = U_wc
 
     # embedding to hidden state proposal weights, biases
-    Wx_xc = norm_weight(nin, dim_char)
+    Wx_xc = norm_weight(nin, dim_char, logfile=logfile)
     params[_p(prefix, 'Wx_xc')] = Wx_xc
     params[_p(prefix, 'bx_c')] = numpy.zeros((dim_char,)).astype('float32')
 
     # recurrent transformation weights for hidden state proposal
-    Ux_cc = ortho_weight(dim_char)
+    Ux_cc = ortho_weight(dim_char, logfile=logfile)
     params[_p(prefix, 'Ux_cc')] = Ux_cc
-    Ux_wc = ortho_weight(dim_char)
+    Ux_wc = ortho_weight(dim_char, logfile=logfile)
     params[_p(prefix, 'Ux_wc')] = Ux_wc
 
     # embedding to gates transformation weights, biases
@@ -2397,7 +2399,7 @@ def param_init_biscale_decoder_both(options, params,
         W_cw = norm_vector(dim_char)
         params[_p(prefix, 'b_w')] = numpy.zeros((1,)).astype('float32')
     else:
-        W_cw = norm_weight(dim_char, dim_word)
+        W_cw = norm_weight(dim_char, dim_word, logfile=logfile)
         params[_p(prefix, 'b_w')] = numpy.zeros((dim_word,)).astype('float32')
     params[_p(prefix, 'W_cw')] = W_cw
 
@@ -2405,59 +2407,59 @@ def param_init_biscale_decoder_both(options, params,
     if scalar_bound:
         U_ww = norm_vector(dim_word)
     else:
-        U_ww = ortho_weight(dim_word)
+        U_ww = ortho_weight(dim_word, logfile=logfile)
     params[_p(prefix, 'U_ww')] = U_ww
 
     # embedding to hidden state proposal weights, biases
-    Wx_cw = norm_weight(dim_char, dim_word)
+    Wx_cw = norm_weight(dim_char, dim_word, logfile=logfile)
     params[_p(prefix, 'Wx_cw')] = Wx_cw
     params[_p(prefix, 'bx_w')] = numpy.zeros((dim_word,)).astype('float32')
 
     # recurrent transformation weights for hidden state proposal
-    Ux_ww = ortho_weight(dim_word)
+    Ux_ww = ortho_weight(dim_word, logfile=logfile)
     params[_p(prefix, 'Ux_ww')] = Ux_ww
 
     # context to GRU gates: char-level
     if scalar_bound:
         W_ctxc = norm_vector(dimctx)
     else:
-        W_ctxc = norm_weight(dimctx, dim_char)
+        W_ctxc = norm_weight(dimctx, dim_char, logfile=logfile)
     params[_p(prefix, 'W_ctxc')] = W_ctxc
 
     # context to hidden proposal: char-level
-    Wx_ctxc = norm_weight(dimctx, dim_char)
+    Wx_ctxc = norm_weight(dimctx, dim_char, logfile=logfile)
     params[_p(prefix, 'Wx_ctxc')] = Wx_ctxc
 
     # context to GRU gates: word-level
     if scalar_bound:
         W_ctxw = norm_vector(dimctx)
     else:
-        W_ctxw = norm_weight(dimctx, dim_word)
+        W_ctxw = norm_weight(dimctx, dim_word, logfile=logfile)
     params[_p(prefix, 'W_ctxw')] = W_ctxw
 
     # context to hidden proposal: word-level
-    Wx_ctxw = norm_weight(dimctx, dim_word)
+    Wx_ctxw = norm_weight(dimctx, dim_word, logfile=logfile)
     params[_p(prefix, 'Wx_ctxw')] = Wx_ctxw
 
     # attention: prev -> hidden
-    Winp_att = norm_weight(nin, dimctx)
+    Winp_att = norm_weight(nin, dimctx, logfile=logfile)
     params[_p(prefix, 'Winp_att')] = Winp_att
 
     # attention: context -> hidden
-    Wctx_att = norm_weight(dimctx)
+    Wctx_att = norm_weight(dimctx, logfile=logfile)
     params[_p(prefix, 'Wctx_att')] = Wctx_att
 
     # attention: decoder -> hidden
-    Wdecc_att = norm_weight(dim_char, dimctx)
+    Wdecc_att = norm_weight(dim_char, dimctx, logfile=logfile)
     params[_p(prefix, 'Wdecc_att')] = Wdecc_att
-    Wdecw_att = norm_weight(dim_word, dimctx)
+    Wdecw_att = norm_weight(dim_word, dimctx, logfile=logfile)
     params[_p(prefix, 'Wdecw_att')] = Wdecw_att
 
     # attention: hidden bias
     params[_p(prefix, 'b_att')] = numpy.zeros((dimctx,)).astype('float32')
 
     # attention
-    U_att = norm_weight(dimctx, 1)
+    U_att = norm_weight(dimctx, 1, logfile=logfile)
     params[_p(prefix, 'U_att')] = U_att
     c_att = numpy.zeros((1,)).astype('float32')
     params[_p(prefix, 'c_att')] = c_att
@@ -2473,7 +2475,7 @@ def biscale_decoder_both(tparams, state_below, options,
                          init_bound_char=None, init_bound_word=None,
                          scalar_bound=False,
                          **kwargs):
-
+    logfile=options['logfile']
     assert context, 'Context must be provided'
     assert context.ndim == 3, \
         'Context must be 3-D: #annotation x #sample x #dim'
@@ -2728,7 +2730,6 @@ def adam(lr, tparams, grads, inp, cost, not_finite=None, clipped=None,
     updates[toptparams['i']] = i_t
     f_update = theano.function([lr], [], updates=updates,
                                on_unused_input='ignore', profile=profile)
-
     return f_grad_shared, f_update, toptparams
 
 

@@ -2,7 +2,7 @@ import pprint
 import sys
 import numpy as np
 
-def pbatch(source, dic):
+def pbatch(source, dic, logfile=sys.stdout):
     ss = np.transpose(source)
     for line in ss[:10]:
         for word in line:
@@ -18,11 +18,11 @@ def pbatch(source, dic):
             elif a == "UNK":
                 b = "|"
 
-            sys.stdout.write(b)
-        print " "
-    print ""
+            logfile.write(b)
+        print >>logfile," "
+    print >>logfile,""
 
-def pbatch_many(source, dic, n_x):
+def pbatch_many(source, dic, n_x, logfile=sys.stdout):
     ss = np.transpose(source)
     iis = [0, 20, n_x-8,n_x-1]
 
@@ -41,6 +41,6 @@ def pbatch_many(source, dic, n_x):
             elif a == "UNK":
                 b = "|"
 
-            sys.stdout.write(b)
-        print " "
-    print ""
+            logfile.write(b)
+        print >>logfile," "
+    print >>logfile,""

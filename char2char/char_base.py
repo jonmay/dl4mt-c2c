@@ -16,22 +16,17 @@ from mixer import *
 
 def init_params(options):
     params = OrderedDict()
+    logfile = options['logfile']
 
-    print "new char_base initialise..."
-    print "source dictionary size: %d" % options['n_words_src']
     # embedding
-    params['Wemb'] = norm_weight(options['n_words_src'], options['dim_word_src'])
-    params['Wemb_dec'] = norm_weight(options['n_words'], options['dim_word'])
+    params['Wemb'] = norm_weight(options['n_words_src'], options['dim_word_src'], logfile=logfile)
+    params['Wemb_dec'] = norm_weight(options['n_words'], options['dim_word'], logfile=logfile)
 
-    print("getting layers")
     params = get_layer('multi_scale_conv_encoder')[0](options, params, prefix='multi_scale_conv_enc1', dim=options['dim_word_src'], width=options['conv_width'], nkernels=options['conv_nkernels'])
 
-    print("getting %d highway" % options['highway'])
     for ii in xrange(options['highway']):
-        print("highway %d" % ii)
         params = get_layer('hw')[0](options, params, prefix="hw_network{}".format(ii+1), dim=numpy.sum(options['conv_nkernels']))
 
-    print("Getting encoders")
     params = get_layer('gru')[0](options, params,
                                  prefix='encoder',
                                  nin=numpy.sum(options['conv_nkernels']),
@@ -42,7 +37,6 @@ def init_params(options):
                                  dim=options['enc_dim'])
     ctxdim = 2 * options['enc_dim']
 
-    print("getting decoders")
     params = get_layer('ff')[0](options, params,
                                 prefix='ff_init_state_char',
                                 nin=ctxdim,
@@ -52,7 +46,6 @@ def init_params(options):
                                 nin=ctxdim,
                                 nout=options['dec_dim'])
 
-    print "target dictionary size: %d" % options['n_words']
     # decoder
     params = get_layer('two_layer_gru_decoder')[0](options, params,
                                                    prefix='decoder',
@@ -82,7 +75,7 @@ def init_params(options):
 
 def build_model(tparams, options):
     opt_ret = OrderedDict()
-
+    logfile = options['logfile']
     trng = RandomStreams(numpy.random.RandomState(numpy.random.randint(1024)).randint(numpy.iinfo(numpy.int32).max))
     use_noise = theano.shared(numpy.float32(0.))
 
@@ -114,7 +107,6 @@ def build_model(tparams, options):
     # hw_out.shape = (maxlen_x_pad/pool_stride, n_samples, sum(nkernels))
 
     if options['dropout_gru']:
-        print "Dropout before GRUs."
         hw_out = hw_out * trng.binomial(hw_out.shape, p=0.5, n=1, dtype=hw_out.dtype) * 2.0
 
     # pass through gru layer, recurrence here
@@ -162,7 +154,7 @@ def build_model(tparams, options):
     logit = tensor.tanh(logit_rnn + logit_prev + logit_ctx)
 
     if options['dropout_softmax']:
-        print "Dropout before Softmax"
+
         logit = logit * trng.binomial(logit.shape, p=0.5, n=1, dtype=logit.dtype) * 2.0
 
     logit = get_layer('ff')[1](tparams, logit, options,
@@ -180,7 +172,7 @@ def build_model(tparams, options):
     return trng, use_noise, x, x_mask, y, y_mask, opt_ret, cost
 
 def build_sampler(tparams, options, trng, use_noise):
-
+    logfile = options['logfile']
     x = tensor.matrix('x', dtype='int64')
 
     n_timesteps = x.shape[0]
@@ -208,10 +200,8 @@ def build_sampler(tparams, options, trng, use_noise):
     init_state_word = get_layer('ff')[1](tparams, ctx_mean, options,
                                          prefix='ff_init_state_word', activ='tanh')
 
-    print 'Building f_init...',
     outs = [init_state_char, init_state_word, ctx]
     f_init = theano.function([x], outs, name='f_init', profile=profile)
-    print 'Done'
 
     y = tensor.vector('y_sampler', dtype='int64')
     init_state_char = tensor.matrix('init_state_char', dtype='float32')
@@ -259,11 +249,9 @@ def build_sampler(tparams, options, trng, use_noise):
     next_sample = trng.multinomial(pvals=next_probs).argmax(1)
 
     # next word probability
-    print 'Building f_next...',
     inps = [y, ctx, init_state_char, init_state_word]
     outs = [next_probs, next_sample, next_state_char, next_state_word]
     f_next = theano.function(inps, outs, name='f_next', profile=profile)
-    print 'Done'
 
     return f_init, f_next
 

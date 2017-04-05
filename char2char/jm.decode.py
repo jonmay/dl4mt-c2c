@@ -12,24 +12,20 @@ import numpy
 import cPickle as pkl
 from mixer import *
 
-def translate_model(jobqueue, resultqueue, model, options, k, normalize, build_sampler, gen_sample, init_params, model_id, silent):
+def translate_model(jobqueue, resultqueue, model, options, k, normalize, build_sampler, gen_sample, init_params, model_id, silent, logfile):
 
     from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
     trng = RandomStreams(1234)
 
     # allocate model parameters
-    print("init params")
     params = init_params(options)
 
-    print("load params")
     # load model parameters and set theano shared variables
     params = load_params(model, params)
-    print("init tparams")
     tparams = init_tparams(params)
 
     # word index
     use_noise = theano.shared(numpy.float32(0.))
-    print("build sampler")
     f_init, f_next = build_sampler(tparams, options, trng, use_noise)
 
     def _translate(seq):
@@ -53,7 +49,7 @@ def translate_model(jobqueue, resultqueue, model, options, k, normalize, build_s
 
         idx, x = req[0], req[1]
         if not silent:
-            print "sentence", idx, model_id
+            print >>logfile, "sentence", idx, model_id
         seq = _translate(x)
 
         resultqueue.append((idx, seq))
@@ -62,7 +58,7 @@ def translate_model(jobqueue, resultqueue, model, options, k, normalize, build_s
 def main(model, dictionary, dictionary_target, source_file, saveto, k=5,
          normalize=False, encoder_chr_level=False,
          decoder_chr_level=False, utf8=False, 
-          model_id=None, silent=False):
+          model_id=None, silent=False, logfile=sys.stdout):
 
     from char_base import (build_sampler, gen_sample, init_params)
 
@@ -71,7 +67,7 @@ def main(model, dictionary, dictionary_target, source_file, saveto, k=5,
     pkl_file = model.split('.')[0] + '.pkl'
     with open(pkl_file, 'rb') as f:
         options = pkl.load(f)
-
+    options['logfile']=logfile
     # load source dictionary and invert
     with open(dictionary, 'rb') as f:
         word_dict = pkl.load(f)
@@ -150,40 +146,51 @@ def main(model, dictionary, dictionary_target, source_file, saveto, k=5,
             trans[resp[0]] = resp[1]
             if numpy.mod(idx, 10) == 0:
                 if not silent:
-                    print 'Sample ', (idx+1), '/', n_samples, ' Done', model_id
+                    print >>logfile, 'Sample ', (idx+1), '/', n_samples, ' Done', model_id
         return trans
 
-    print 'Translating ', source_file, '...'
+    print >>logfile, 'Translating ', source_file, '...'
     n_samples = _send_jobs(source_file)
-    print "jobs sent"
+    print >>logfile, "jobs sent"
 
-    translate_model(jobqueue, resultqueue, model, options, k, normalize, build_sampler, gen_sample, init_params, model_id, silent)
+    translate_model(jobqueue, resultqueue, model, options, k, normalize, build_sampler, gen_sample, init_params, model_id, silent, logfile)
     trans = _seqs2words(_retrieve_jobs(n_samples, silent))
-    print "translations retrieved"
+    print >>logfile, "translations retrieved"
 
     with open(saveto, 'w') as f:
         print >>f, u'\n'.join(trans).encode('utf-8')
 
-    print "Done", saveto
+    print >>logfile, "Done", saveto
+
+def addonoffarg(parser, arg, dest=None, default=True, help="TODO"):
+  ''' add the switches --arg and --no-arg that set parser.arg to true/false, respectively'''
+  group = parser.add_mutually_exclusive_group()
+  dest = arg if dest is None else dest
+  group.add_argument('--%s' % arg, dest=dest, action='store_true', default=default, help=help)
+  group.add_argument('--no-%s' % arg, dest=dest, action='store_false', default=default, help="See --%s" % arg)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-k', type=int, default=20, help="beam width") # beam width
     parser.add_argument('-n', action="store_true", default=True, help="normalize") # normalize scores for different hypothesis based on their length (to penalize shorter hypotheses, longer hypotheses are already penalized by the BLEU measure, which is precision of sorts).
-    parser.add_argument('-enc_c', action="store_true", default=True) # is encoder character-level?
-    parser.add_argument('-dec_c', action="store_true", default=True) # is decoder character-level?
+    parser.add_argument('--source_dict', '--sd',  type=str, help="source dictionary file")
+    parser.add_argument('--target_dict', '--td', type=str, help="target dictionary file")
+    addonoffarg(parser, "enc_c", help="is encoder character level?", default=True)
+    addonoffarg(parser, "dec_c", help="is decoder character level?", default=True)
     parser.add_argument('-utf8', action="store_true", default=True)
     parser.add_argument('-many', action="store_true", default=False) # multilingual model?
     parser.add_argument('-model', type=str) # absolute path to a model (.npz file)
     parser.add_argument("--logfile", "-l", nargs='?', type=argparse.FileType('w'), default=sys.stdout, help="output file")
-    parser.add_argument('-translate', type=str, help="de_en / cs_en / fi_en / ru_en / amh_eng") # which language?
     parser.add_argument('-saveto', type=str, ) # absolute path where the translation should be saved
-    parser.add_argument('-which', type=str, help="dev / test1 / test2", default="dev") # if you wish to translate any of development / test1 / test2 file from WMT15, simply specify which one here
     parser.add_argument('-source', type=str, default="") # if you wish to provide your own file to be translated, provide an absolute path to the file to be translated
     parser.add_argument('-silent', action="store_true", default=False) # suppress progress messages
 
-    args = parser.parse_args()
+    try:
+        args = parser.parse_args()
+    except IOError as msg:
+        parser.error(str(msg))
 
+    logfile=args.logfile
     which_wmt = None
     if args.many:
         which_wmt = "multi-wmt15"
@@ -191,49 +198,20 @@ if __name__ == "__main__":
         which_wmt = "wmt15"
 
     data_path = os.path.normpath(os.path.join(scriptdir, "..", which_wmt))
-
-    if args.which not in "dev test1 test2".split():
-        raise Exception('1')
-
-    if args.translate not in ["de_en", "cs_en", "fi_en", "ru_en", "amh_eng"]:
-        raise Exception('1')
-
-    if args.translate == "fi_en" and args.which == "test2":
-        raise Exception('1')
-
-    if args.many:
-        from wmt_path_iso9 import *
-
-        dictionary = wmts['many_en']['dic'][0][0]
-        dictionary_target = wmts['many_en']['dic'][0][1]
-        source = wmts[args.translate][args.which][0][0]
-
-    else:
-        from wmt_path import *
-
-        aa = args.translate.split("_")
-        lang = aa[0]
-        en = aa[1]
-
-        dictionary = wmts[args.translate]["dic"][0][0]
-        dictionary_target = wmts[args.translate]["dic"][0][1]
-        source = wmts[args.translate][args.which][0][0]
-
+    dictionary = args.source_dict
+    dictionary_target = args.target_dict
+    source = args.source
     char_base = args.model.split("/")[-1]
-
-    dictionary = os.path.join(data_path, dictionary)
-    dictionary_target = os.path.join(data_path, dictionary_target)
-    source = os.path.join(data_path, source)
 
     if args.source != "":
         source = args.source
 
-    print "src dict:", dictionary
-    print "trg dict:", dictionary_target
-    print "source:", source
-    print "dest :", args.saveto
+    print >>logfile, "src dict:", dictionary
+    print >>logfile, "trg dict:", dictionary_target
+    print >>logfile, "source:", source
+    print >>logfile, "dest :", args.saveto
 
-    print args
+    print >>logfile, args
 
     time1 = time.time()
     main(args.model, dictionary, dictionary_target, source,
@@ -242,6 +220,7 @@ if __name__ == "__main__":
          utf8=args.utf8,
          model_id=char_base,
          silent=args.silent,
+         logfile=args.logfile,
         )
     time2 = time.time()
     duration = (time2-time1)/float(60)
