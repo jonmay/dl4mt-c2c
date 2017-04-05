@@ -3,7 +3,27 @@ import sys
 import os
 import time
 import os.path
+import codecs
+import gzip
 scriptdir = os.path.dirname(os.path.abspath(__file__))
+
+reader = codecs.getreader('utf8')
+writer = codecs.getwriter('utf8')
+
+
+def prepfile(fh, code):
+  if type(fh) is str:
+    fh = open(fh, code)
+  ret = gzip.open(fh.name, code) if fh.name.endswith(".gz") else fh
+  if sys.version_info[0] == 2:
+    if code.startswith('r'):
+      ret = reader(fh)
+    elif code.startswith('w'):
+      ret = writer(fh)
+    else:
+      sys.stderr.write("I didn't understand code "+code+"\n")
+      sys.exit(1)
+  return ret
 
 reload(sys)
 sys.setdefaultencoding('utf-8')
@@ -55,7 +75,7 @@ def translate_model(jobqueue, resultqueue, model, options, k, normalize, build_s
         resultqueue.append((idx, seq))
     return
 
-def main(model, dictionary, dictionary_target, source_file, saveto, k=5,
+def main(model, dictionary, dictionary_target, source, saveto, k=5,
          normalize=False, encoder_chr_level=False,
          decoder_chr_level=False, utf8=False, 
           model_id=None, silent=False, logfile=sys.stdout):
@@ -64,9 +84,17 @@ def main(model, dictionary, dictionary_target, source_file, saveto, k=5,
 
     # load model model_options
     # /misc/kcgscratch1/ChoGroup/jasonlee/dl4mt-cdec/models/one-multiscale-conv-two-hw-lngru-1234567-100-150-200-200-200-200-200-66-one.pkl
-    pkl_file = model.split('.')[0] + '.pkl'
-    with open(pkl_file, 'rb') as f:
-        options = pkl.load(f)
+    # annoying pkl file naming conventions workaround
+    for extent in range(1, len(model.split('.'))):
+        try:
+            pkl_file = '.'.join(model.split('.')[:extent]) + '.pkl'
+            with open(pkl_file, 'rb') as f:
+                options = pkl.load(f)
+            break
+        except IOError:
+            print >>logfile, "not {}".format(pkl_file)
+    if options is None:
+        raise IOError("Couldn't find pkl file in {}".format(model))
     options['logfile']=logfile
     # load source dictionary and invert
     with open(dictionary, 'rb') as f:
@@ -108,34 +136,32 @@ def main(model, dictionary, dictionary_target, source_file, saveto, k=5,
                 capsw.append(' '.join(ww))
         return capsw
 
-    def _send_jobs(fname):
-        with open(fname, 'r') as f:
-            for idx, line in enumerate(f):
-                # idx : 0 ... len-1 
-                pool_window = options['pool_stride']
+    def _send_jobs(fh):
+        for idx, line in enumerate(fh):
+            # idx : 0 ... len-1 
+            pool_window = options['pool_stride']
 
-                if encoder_chr_level:
-                    words = list(line.decode('utf-8').strip())
-                else:
-                    words = line.strip().split()
+            if encoder_chr_level:
+                words = list(line.decode('utf-8').strip())
+            else:
+                words = line.strip().split()
 
-                x = map(lambda w: word_dict[w] if w in word_dict else 1, words)
-                x = map(lambda ii: ii if ii < options['n_words_src'] else 1, x)
-                x = [2] + x + [3]
+            x = map(lambda w: word_dict[w] if w in word_dict else 1, words)
+            x = map(lambda ii: ii if ii < options['n_words_src'] else 1, x)
+            x = [2] + x + [3]
 
-                # len : 77, pool_window 10 -> 3 
-                # len : 80, pool_window 10 -> 0
-                #rem = pool_window - ( len(x) % pool_window )
-                #if rem < pool_window:
-                #    x += [0]*rem
+            # len : 77, pool_window 10 -> 3 
+            # len : 80, pool_window 10 -> 0
+            #rem = pool_window - ( len(x) % pool_window )
+            #if rem < pool_window:
+            #    x += [0]*rem
 
-                while len(x) % pool_window != 0:
-                    x += [0]
+            while len(x) % pool_window != 0:
+                x += [0]
 
-                x = [0]*pool_window + x + [0]*pool_window
+            x = [0]*pool_window + x + [0]*pool_window
 
-                jobqueue.append((idx, x))
-
+            jobqueue.append((idx, x))
         return idx+1
 
     def _retrieve_jobs(n_samples, silent):
@@ -149,18 +175,16 @@ def main(model, dictionary, dictionary_target, source_file, saveto, k=5,
                     print >>logfile, 'Sample ', (idx+1), '/', n_samples, ' Done', model_id
         return trans
 
-    print >>logfile, 'Translating ', source_file, '...'
-    n_samples = _send_jobs(source_file)
+    print >>logfile, 'Translating ...'
+    n_samples = _send_jobs(source)
     print >>logfile, "jobs sent"
 
     translate_model(jobqueue, resultqueue, model, options, k, normalize, build_sampler, gen_sample, init_params, model_id, silent, logfile)
     trans = _seqs2words(_retrieve_jobs(n_samples, silent))
     print >>logfile, "translations retrieved"
 
-    with open(saveto, 'w') as f:
-        print >>f, u'\n'.join(trans).encode('utf-8')
-
-    print >>logfile, "Done", saveto
+    print >>saveto, u'\n'.join(trans).encode('utf-8')
+    print >>logfile, "Done"
 
 def addonoffarg(parser, arg, dest=None, default=True, help="TODO"):
   ''' add the switches --arg and --no-arg that set parser.arg to true/false, respectively'''
@@ -181,8 +205,8 @@ if __name__ == "__main__":
     parser.add_argument('-many', action="store_true", default=False) # multilingual model?
     parser.add_argument('-model', type=str) # absolute path to a model (.npz file)
     parser.add_argument("--logfile", "-l", nargs='?', type=argparse.FileType('w'), default=sys.stdout, help="output file")
-    parser.add_argument('-saveto', type=str, ) # absolute path where the translation should be saved
-    parser.add_argument('-source', type=str, default="") # if you wish to provide your own file to be translated, provide an absolute path to the file to be translated
+    parser.add_argument('-saveto', nargs='?', type=argparse.FileType('w'), default=sys.stdout, help="output file")
+    parser.add_argument('-source', nargs='?', type=argparse.FileType('r'), default=sys.stdin, help="input file")
     parser.add_argument('-silent', action="store_true", default=False) # suppress progress messages
 
     try:
@@ -200,22 +224,19 @@ if __name__ == "__main__":
     data_path = os.path.normpath(os.path.join(scriptdir, "..", which_wmt))
     dictionary = args.source_dict
     dictionary_target = args.target_dict
-    source = args.source
+    source = prepfile(args.source, 'r')
+    saveto = prepfile(args.saveto, 'w')
     char_base = args.model.split("/")[-1]
 
-    if args.source != "":
-        source = args.source
 
     print >>logfile, "src dict:", dictionary
     print >>logfile, "trg dict:", dictionary_target
-    print >>logfile, "source:", source
-    print >>logfile, "dest :", args.saveto
 
     print >>logfile, args
 
     time1 = time.time()
     main(args.model, dictionary, dictionary_target, source,
-         args.saveto, k=args.k, normalize=args.n, encoder_chr_level=args.enc_c,
+         saveto, k=args.k, normalize=args.n, encoder_chr_level=args.enc_c,
          decoder_chr_level=args.dec_c,
          utf8=args.utf8,
          model_id=char_base,

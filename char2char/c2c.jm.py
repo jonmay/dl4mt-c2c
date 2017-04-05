@@ -115,7 +115,7 @@ if __name__ == '__main__':
 
     import sys, time
 
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="train c2c nmt model (jm prettifying of nyu code)",formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--train_source', '--ts', type=str, help="source training file")
     parser.add_argument('--train_target', '--tt', type=str, help="target training file")
     parser.add_argument("--logfile", "-l", nargs='?', type=argparse.FileType('w'), default=sys.stdout, help="output file")
@@ -125,48 +125,48 @@ if __name__ == '__main__':
     parser.add_argument('--target_dict', '--td', type=str, help="target dictionary file")
     parser.add_argument('--modelname', '-m', type=str, help="immediate parent directory of model")
 
-    parser.add_argument('-highway', type=int, default=4)
+    parser.add_argument('-highway', type=int, default=4, help="highway")
 
-    parser.add_argument('-conv_width', type=str, default="1-2-3-4-5-6-7-8")
-    parser.add_argument('-conv_nkernels', type=str, default="200-200-250-250-300-300-300-300")
+    parser.add_argument('-conv_width', type=str, default="1-2-3-4-5-6-7-8", help="conv width")
+    parser.add_argument('-conv_nkernels', type=str, default="200-200-250-250-300-300-300-300", help="conv nkernels")
 
-    parser.add_argument('-pool_window', type=int, default=5)
-    parser.add_argument('-pool_stride', type=int, default=5)
+    parser.add_argument('-pool_window', type=int, default=5, help="pool window")
+    parser.add_argument('-pool_stride', type=int, default=5, help="pool stride")
 
-    parser.add_argument('-enc_dim', type=int, default=512)
-    parser.add_argument('-dec_dim', type=int, default=1024)
+    parser.add_argument('-enc_dim', type=int, default=512, help="encoder dimension")
+    parser.add_argument('-dec_dim', type=int, default=1024, help="decoder dimension")
 
-    parser.add_argument('-dim_word', type=int, default=512)
-    parser.add_argument('-dim_word_src', type=int, default=128)
+    parser.add_argument('-dim_word', type=int, default=512, help="dim word")
+    parser.add_argument('-dim_word_src', type=int, default=128, help="TODO")
 
-    parser.add_argument('-batch_size', type=int, default=64, help="")
-    parser.add_argument('-valid_batch_size', type=int, default=64, help="")
+    parser.add_argument('-batch_size', type=int, default=64,  help="TODO")
+    parser.add_argument('-valid_batch_size', type=int, default=64,  help="TODO")
 
-    parser.add_argument('-dropout_gru', type=int, default=0, help="")
-    parser.add_argument('-dropout_softmax', type=int, default=0, help="")
+    parser.add_argument('-dropout_gru', type=int, default=0,  help="TODO")
+    parser.add_argument('-dropout_softmax', type=int, default=0,  help="TODO")
 
-    parser.add_argument('-maxlen', type=int, default=450, help="")
-    parser.add_argument('-maxlen_trg', type=int, default=500, help="")
-    parser.add_argument('-maxlen_sample', type=int, default=500, help="")
+    parser.add_argument('-maxlen', type=int, default=450,  help="TODO")
+    parser.add_argument('-maxlen_trg', type=int, default=500,  help="TODO")
+    parser.add_argument('-maxlen_sample', type=int, default=500,  help="TODO")
 
-    parser.add_argument('-re_load', action="store_true", default=False)
-    parser.add_argument('-re_load_old_setting', action="store_true", default=False)
+    parser.add_argument('-re_load', action="store_true", default=False, help="TODO")
+    parser.add_argument('-re_load_old_setting', action="store_true", default=False, help="TODO")
     parser.add_argument('-quit_immediately', action="store_true", default=False, help="if true, will not proceed training, only print the size of the model.")
 
-    parser.add_argument('-max_epochs', type=int, default=1000000000000, help="")
-    parser.add_argument('-patience', type=int, default=-1, help="")
-    parser.add_argument('-learning_rate', type=float, default=0.0001, help="")
+    parser.add_argument('-max_epochs', type=int, default=1000000000000,  help="TODO")
+    parser.add_argument('-patience', type=int, default=-1,  help="TODO")
+    parser.add_argument('-learning_rate', type=float, default=0.0001,  help="TODO")
 
-    parser.add_argument('-optimizer', type=str, default="adam", help="")
-    parser.add_argument('-decay_c', type=int, default=0, help="")
-    parser.add_argument('-clip_c', type=int, default=1, help="")
+    parser.add_argument('-optimizer', type=str, default="adam",  help="TODO")
+    parser.add_argument('-decay_c', type=int, default=0,  help="TODO")
+    parser.add_argument('-clip_c', type=int, default=1,  help="TODO")
 
-    parser.add_argument('-saveFreq', type=int, default=5000, help="")
-    parser.add_argument('-sampleFreq', type=int, default=5000, help="")
-    parser.add_argument('-dispFreq', type=int, default=1000, help="")
-    parser.add_argument('-validFreq', type=int, default=5000, help="")
-    parser.add_argument('-pbatchFreq', type=int, default=5000, help="")
-    parser.add_argument('-sort_size', type=int, default=20, help="")
+    parser.add_argument('-saveFreq', type=int, default=5000,  help="TODO")
+    parser.add_argument('-sampleFreq', type=int, default=5000,  help="TODO")
+    parser.add_argument('-dispFreq', type=int, default=1000,  help="TODO")
+    parser.add_argument('-validFreq', type=int, default=5000,  help="TODO")
+    parser.add_argument('-pbatchFreq', type=int, default=5000,  help="TODO")
+    parser.add_argument('-sort_size', type=int, default=20,  help="TODO")
 
     parser.add_argument('-source_word_level', type=int, default=0, help="set to 1 to use word, not char model for source")
     parser.add_argument('-target_word_level', type=int, default=0, help="set to 1 to use word, not char model for target")
